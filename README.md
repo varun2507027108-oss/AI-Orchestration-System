@@ -39,19 +39,90 @@ graph TD
     Join --> End([ deep deep interaction console ])
 ```
 
+---
+
+## 👥 Meet the Agents in Detail
+
+### 1. 💡 Startup Advisor
+*   **Core Mission**: Acts as the initial filter and risk gatekeeper. It evaluates the founder's raw concept for feasibility, market saturation, and potential execution bottlenecks.
+*   **LLM Model**: Groq (`llama-3.3-70b-versatile`) via `ADVISOR_API_KEY` (or generic `GROQ_API_KEY`).
+*   **Processing Logic**: Evaluates key parameters such as value proposition complexity, resource constraints, and regulatory hurdles. Calculates a float-based risk score. If the risk score is high (threshold $\ge 0.6$) or if critical red flags are present, it triggers a system interrupt.
+*   **Output Schema (`ValidationResult`)**:
+    *   `verdict` (string): The summary assessment (e.g., "Approved", "Needs Revision").
+    *   `risk_score` (float): Value between `0.0` (no risk) and `1.0` (extreme risk).
+    *   `reasoning` (string): Deep architectural or business justification for the verdict.
+    *   `red_flags` (list of strings): List of specific hurdles or structural concerns.
+
+### 2. 🔍 Market Researcher
+*   **Core Mission**: Gathers real-time external competitive intelligence to ground the startup idea in current market realities.
+*   **LLM Model**: Groq (`llama-3.3-70b-versatile`) via `RESEARCHER_API_KEY` (or generic `GROQ_API_KEY`).
+*   **Tools**: **Tavily Search API** tool (`tools/tavily.py`) executing direct search payloads.
+*   **Processing Logic**: Automatically triggers search queries focusing on competitors and industry trends. Receives search results, parses the raw webpage content, estimates the Total Addressable Market (TAM), identifies top players, and filters credible sources.
+*   **Output Schema (`MarketResearchReport`)**:
+    *   `tam_estimate` (string): Estimated market size based on research metrics.
+    *   `competitors` (list of objects): Competitors list, where each object contains `name`, `description`, and `url`.
+    *   `trends` (list of strings): Core macro/micro trends observed in the space.
+    *   `sources` (list of strings): List of validated URLs cited in the research.
+
+### 3. 📋 Product Manager
+*   **Core Mission**: Synthesizes the core startup concept and the competitor landscape research into a foundational product specification.
+*   **LLM Model**: Google Gemini (`gemini-2.5-flash`) via `PM_API_KEY` (or generic `GEMINI_API_KEY`).
+*   **Processing Logic**: Matches features against identified market gaps. It drafts user stories, prioritizes features, and builds a phased timeline.
+*   **Output Schema (`PRD`)**:
+    *   `problem_statement` (string): A clear, concise statement of the problem being solved.
+    *   `user_stories` (list of strings): Standard user story templates defining feature value.
+    *   `features` (list of objects): Feature items containing `name`, `description`, and `priority` (High/Medium/Low).
+    *   `roadmap_phases` (list of objects): Phased release plan containing phase `name` and list of roadmap `items`.
+
+### 4. 📐 System Architect
+*   **Core Mission**: Designs the technical foundation for the product specified in the PRD, generating concrete schemas and interface contracts.
+*   **LLM Model**: Nvidia NIM (`nvidia/llama-3.1-nemotron-70b-instruct`) via `ARCHITECT_API_KEY` (or generic `NVIDIA_NIM_API_KEY`).
+*   **Processing Logic**: Analyzes the PRD's features list, translates them into standard relational database models, structures API endpoint contracts, and compiles system design notes.
+*   **Output Schema (`ArchitectureSpec`)**:
+    *   `db_schema_sql` (string): Valid DDL SQL script specifying tables, constraints, and relationships.
+    *   `db_schema_mermaid` (string): Diagram written in Mermaid.js ER notation for visual rendering.
+    *   `api_endpoints` (list of objects): Standard REST endpoints containing `method`, `path`, and `description`.
+    *   `system_design_notes` (string): Technical recommendations regarding caching, architecture patterns, and integrations.
+
+### 5. ⚙️ Engineering Manager
+*   **Core Mission**: Deconstructs technical specifications into actionable development cycles, issue logs, and automated repository boards.
+*   **LLM Model**: Groq (`llama-3.3-70b-versatile`) via `EM_API_KEY` (or generic `GROQ_API_KEY`).
+*   **Tools**: **GitHub REST API** integration (`tools/github.py`) for automated issue synchronization.
+*   **Processing Logic**: Creates a list of standard developer tasks, categorizes them with tags, and maps them to development sprints. If a repository path is specified, it invokes the GitHub API client to programmatically create issues.
+*   **Output Schema (`IssuesAndSprintPlan`)**:
+    *   `issues` (list of objects): Issue descriptions containing `title`, `body`, and `labels`.
+    *   `sprints` (list of objects): Development phases containing sprint `name` and the list of related `issue_titles`.
+
+### 6. 📣 Marketing Specialist
+*   **Core Mission**: Converts product capabilities into high-converting promotional copies and launch marketing sequences.
+*   **LLM Model**: Groq (`llama-3.3-70b-versatile`) via `MARKETING_API_KEY` (or generic `GROQ_API_KEY`).
+*   **Processing Logic**: Analyzes target users and features to write headlines, social copy, and outreach campaign copy.
+*   **Output Schema (`MarketingAssets`)**:
+    *   `landing_copy` (string): Hero headlines, sub-headlines, and landing page body copy.
+    *   `linkedin_post` (string): A structured post ready for social media promotion.
+    *   `email_campaign` (string): An email outreach sequence template targeting potential early adopters.
 
 ---
 
-## 👥 Meet the Agents
+## ⚙️ How the Orchestration Pipeline Works
 
-| Agent | Icon | Role & Description | LLM / Client |
-| :--- | :---: | :--- | :--- |
-| **Startup Advisor** | 💡 | Evaluates the initial idea, identifies risks, and sets the gate decision. | Groq (`ADVISOR_API_KEY`) |
-| **Market Research** | 🔍 | Researches competitors and market trends using web search. | Groq (`RESEARCHER_API_KEY`) |
-| **Product Manager** | 📋 | Drafts the PRD (Product Requirements Document) based on the research. | Gemini (`PM_API_KEY`) |
-| **System Architect** | 📐 | Compiles the tech stack, system architecture, and outputs SQL schemas. | Nvidia NIM (`ARCHITECT_API_KEY`) |
-| **Engineering Manager** | ⚙️ | Generates task backlogs, creates sprints, and syncs issues to GitHub. | Groq (`EM_API_KEY`) |
-| **Marketing Specialist** | 📣 | Develops brand assets, launch strategies, and marketing copy. | Groq (`MARKETING_API_KEY`) |
+1.  **Intake & Initial Trigger**:
+    The system is triggered via a REST request containing `session_id`, `startup_name`, `idea`, and an optional `github_repo`. This launches the LangGraph workflow.
+2.  **The Human-in-the-Loop Risk Gate**:
+    *   The **Startup Advisor** node evaluates the concept.
+    *   If the advisor flags a `risk_score` exceeding `0.6` or lists any `red_flags`, the graph execution halts using LangGraph's `interrupt` system.
+    *   The backend pauses execution and updates the session status to `awaiting_gate`.
+    *   The founder is presented with a decision modal in the frontend console:
+        *   **Ignored & Continued**: The state updates with `gate_decision = "continue"` and execution resumes immediately to the Market Researcher.
+        *   **Revise Idea**: The founder input is updated as `gate_decision = "revise"`, setting a new `revised_idea` string. The graph loops back to re-trigger the Startup Advisor node on the new input.
+3.  **Core Discovery**:
+    Once the gate validation passes, the **Market Researcher** triggers Tavily's search tool. The parsed facts are sent to the **Product Manager**, who structures the formal PRD.
+4.  **Asynchronous Parallel Branching**:
+    After the Product Manager stage, the graph branches into two concurrent streams:
+    *   **Engineering Stream**: Moves to the **System Architect** to build database models and API specs, and then to the **Engineering Manager** to generate sprints and automatically sync issues to GitHub.
+    *   **Growth Stream**: Moves to the **Marketing Specialist** to generate launch copy.
+5.  **Synchronization & Merge (The Join Node)**:
+    Both branches merge at the **Join** node. Once all parallel tasks are complete, the session state is saved to the SQLite database. The backend automatically triggers the **PDF Report Compiler** (`tools/pdf_export.py`), using `xhtml2pdf` to render a structured PDF report containing all compiled artifacts.
 
 ---
 
@@ -79,8 +150,8 @@ graph TD
 
 ## ⚙️ Environment Configuration
 
-### Backend Setup (`backend/.env`)
-Create a `.env` file inside the `backend` folder and populate it with your keys:
+### Required Environment Variables
+Configure these variables in your deployment environment (e.g., Vercel / backend host):
 
 ```env
 # Generic LLM API Keys
@@ -103,57 +174,6 @@ NOTION_TOKEN=your_notion_integration_token
 NOTION_DATABASE_ID=your_notion_database_id
 
 # Server Configurations
-NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
-ALLOWED_ORIGIN=http://localhost:3000
+NEXT_PUBLIC_BACKEND_URL=your_backend_deployment_url
+ALLOWED_ORIGIN=your_frontend_deployment_url
 ```
-
----
-
-## 🚀 Getting Started
-
-### 1. Start the Backend Server
-Prerequisites: Python 3.10+ installed.
-
-```bash
-cd backend
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the FastAPI server
-python -m uvicorn main:app --host 127.0.0.1 --port 8000
-```
-
-The FastAPI Swagger interactive docs will be available at `http://127.0.0.1:8000/docs`.
-
-### 2. Start the Frontend Application
-Prerequisites: Node.js 18+ installed.
-
-```bash
-cd frontend
-# Install Node dependencies
-npm install
-
-# Run the development server
-npm run dev
-```
-
-Open `http://localhost:3000` in your browser to access the landing page.
-
----
-
-## 🧪 Running Integration Tests
-To verify the complete workflow end-to-end (Safe flow, gate interrupts, resume logic, and PDF generation):
-
-```bash
-cd backend
-python test_api.py
-```
-
----
-
-## ✨ Design & Aesthetic Philosophy
-The frontend uses an **"Ethereal Nature Tech"** design system:
-* **Glassmorphism**: Translucent panels with background blurs, subtle borders, and soft inner shadows.
-* **Harmonious Dark Theme**: Deep forest greens (`#047857`, `#059669`) combined with sleek slate/black colors.
-* **Micro-animations**: Smooth layout animations powered by `framer-motion` for transitions between stages and state updates.
-* **Console-Like Metrics**: A robust sidebar displaying the step-by-step decision logs, risk scores, and generated file exports.
