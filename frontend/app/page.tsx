@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { Shield, Search, FileText, Database, Github, Megaphone } from "lucide-react";
 import { CustomThemeToggler } from "@/components/theme-toggler";
+import { InteractiveGridBackground } from "@/components/interactive-grid-background";
 
 export default function LandingPage() {
   const scrollTo = (id: string) => {
@@ -29,6 +30,9 @@ export default function LandingPage() {
 
       <main>
         <section id="intent" className="min-h-screen flex items-center pt-16 px-6 relative overflow-hidden">
+          {/* Interactive Blueprint Grid Background */}
+          <InteractiveGridBackground />
+
           {/* Subtle green glow */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#E8A33D]/5 rounded-full blur-[100px] pointer-events-none"></div>
 
