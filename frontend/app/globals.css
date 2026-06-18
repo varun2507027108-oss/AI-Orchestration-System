@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-base: var(--base);
+  --color-panel: var(--panel);
+  --color-border-subtle: var(--border-subtle);
+
+  --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  
+  --color-accent: #E8A33D;
+  --color-status-complete: #3FB950;
+  --color-status-failed: #E5484D;
+  --color-status-pending: #6B7280;
+}
+
+:root {
+  --base: #ECEAE3; /* cream */
+  --panel: #FAFAFA;
+  --border-subtle: rgba(0,0,0,0.1);
+  --text-main: #0B0F14;
+  --text-muted: #6B7280;
+}
+
+.dark {
+  --base: #0B0F14;
+  --panel: #11161C;
+  --border-subtle: rgba(255,255,255,0.08);
+  --text-main: #ECEAE3;
+  --text-muted: #8A8F99;
+}
+
+::view-transition-old(root), ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+}
