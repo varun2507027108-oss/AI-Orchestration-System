@@ -8,12 +8,21 @@ logger = logging.getLogger(__name__)
 
 NOTION_VERSION = "2022-06-28"
 
+# Reusable HTTP client for better performance
+NOTION_CLIENT = httpx.AsyncClient(timeout=30.0)
+
 def get_headers() -> Dict[str, str]:
     return {
         "Authorization": f"Bearer {settings.NOTION_TOKEN}",
         "Content-Type": "application/json",
         "Notion-Version": NOTION_VERSION
     }
+
+def _chunk_string(s: str, max_len: int = 1900) -> List[str]:
+    """Splits a string into chunks of max_len to avoid Notion's 2000 char limit."""
+    if not s:
+        return [""]
+    return [s[i:i+max_len] for i in range(0, len(s), max_len)]
 
 async def create_notion_page(startup_name: str, session_id: str) -> Optional[str]:
     """
@@ -43,16 +52,15 @@ async def create_notion_page(startup_name: str, session_id: str) -> Optional[str
     }
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, headers=get_headers(), json=payload)
-            if response.status_code == 200:
-                page_data = response.json()
-                page_id = page_data.get("id")
-                logger.info(f"Created Notion page successfully: {page_id}")
-                return page_id
-            else:
-                logger.error(f"Failed to create Notion page. Status: {response.status_code}, Response: {response.text}")
-                return None
+        response = await NOTION_CLIENT.post(url, headers=get_headers(), json=payload)
+        if response.status_code == 200:
+            page_data = response.json()
+            page_id = page_data.get("id")
+            logger.info(f"Created Notion page successfully: {page_id}")
+            return page_id
+        else:
+            logger.error(f"Failed to create Notion page. Status: {response.status_code}, Response: {response.text}")
+            return None
     except Exception as e:
         logger.exception(f"Error creating Notion page: {e}")
         return None
@@ -72,11 +80,10 @@ async def append_notion_blocks(page_id: str, blocks: List[Dict[str, Any]]) -> bo
         chunk = blocks[i:i + chunk_size]
         payload = {"children": chunk}
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.patch(url, headers=get_headers(), json=payload)
-                if response.status_code != 200:
-                    logger.error(f"Failed to append Notion blocks. Status: {response.status_code}, Response: {response.text}")
-                    return False
+            response = await NOTION_CLIENT.patch(url, headers=get_headers(), json=payload)
+            if response.status_code != 200:
+                logger.error(f"Failed to append Notion blocks. Status: {response.status_code}, Response: {response.text}")
+                return False
         except Exception as e:
             logger.exception(f"Error appending Notion blocks: {e}")
             return False
@@ -93,85 +100,102 @@ def create_heading_block(text: str, level: int = 2) -> Dict[str, Any]:
                 {
                     "type": "text",
                     "text": {
-                        "content": text
+                        "content": text[:1900] # Hard truncate headings just in case
                     }
                 }
             ]
         }
     }
 
-def create_paragraph_block(text: str) -> Dict[str, Any]:
-    return {
-        "object": "block",
-        "type": "paragraph",
-        "paragraph": {
-            "rich_text": [
-                {
-                    "type": "text",
-                    "text": {
-                        "content": text
+def create_paragraph_block(text: str) -> List[Dict[str, Any]]:
+    """Returns a list of paragraph blocks, split if necessary."""
+    blocks = []
+    for chunk in _chunk_string(text):
+        blocks.append({
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": chunk
+                        }
                     }
-                }
-            ]
-        }
-    }
-
-def create_bullet_block(text: str) -> Dict[str, Any]:
-    return {
-        "object": "block",
-        "type": "bulleted_list_item",
-        "bulleted_list_item": {
-            "rich_text": [
-                {
-                    "type": "text",
-                    "text": {
-                        "content": text
-                    }
-                }
-            ]
-        }
-    }
-
-def create_code_block(code: str, language: str = "plain text") -> Dict[str, Any]:
-    return {
-        "object": "block",
-        "type": "code",
-        "code": {
-            "rich_text": [
-                {
-                    "type": "text",
-                    "text": {
-                        "content": code
-                    }
-                }
-            ],
-            "language": language
-        }
-    }
-
-def create_callout_block(text: str, emoji: str = "💡") -> Dict[str, Any]:
-    return {
-        "object": "block",
-        "type": "callout",
-        "callout": {
-            "rich_text": [
-                {
-                    "type": "text",
-                    "text": {
-                        "content": text
-                    }
-                }
-            ],
-            "icon": {
-                "type": "emoji",
-                "emoji": emoji
+                ]
             }
-        }
-    }
+        })
+    return blocks
+
+def create_bullet_block(text: str) -> List[Dict[str, Any]]:
+    """Returns a list of bullet blocks, split if necessary."""
+    blocks = []
+    for chunk in _chunk_string(text):
+        blocks.append({
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": chunk
+                        }
+                    }
+                ]
+            }
+        })
+    return blocks
+
+def create_code_block(code: str, language: str = "plain text") -> List[Dict[str, Any]]:
+    """Returns a list of code blocks, split if necessary."""
+    blocks = []
+    for chunk in _chunk_string(code):
+        blocks.append({
+            "object": "block",
+            "type": "code",
+            "code": {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": chunk
+                        }
+                    }
+                ],
+                "language": language
+            }
+        })
+    return blocks
+
+def create_callout_block(text: str, emoji: str = "💡") -> List[Dict[str, Any]]:
+    """Returns a list of callout blocks, split if necessary."""
+    blocks = []
+    for chunk in _chunk_string(text):
+        blocks.append({
+            "object": "block",
+            "type": "callout",
+            "callout": {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": chunk
+                        }
+                    }
+                ],
+                "icon": {
+                    "type": "emoji",
+                    "emoji": emoji
+                }
+            }
+        })
+    return blocks
 
 def translate_artifact_to_notion_blocks(stage_name: str, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Translates a stage artifact JSON payload into Notion API blocks.
+    Uses extend() instead of append() for text blocks to support chunking.
     """
     blocks = []
     
@@ -182,12 +206,12 @@ def translate_artifact_to_notion_blocks(stage_name: str, payload: Dict[str, Any]
         red_flags = payload.get("red_flags", [])
         
         blocks.append(create_heading_block("1. Startup Advisor Validation", 2))
-        blocks.append(create_callout_block(f"Verdict: {verdict} (Risk Score: {risk_score})", "🛡️"))
-        blocks.append(create_paragraph_block(f"Reasoning: {reasoning}"))
+        blocks.extend(create_callout_block(f"Verdict: {verdict} (Risk Score: {risk_score})", "🛡️"))
+        blocks.extend(create_paragraph_block(f"Reasoning: {reasoning}"))
         if red_flags:
             blocks.append(create_heading_block("Red Flags Flagged", 3))
             for rf in red_flags:
-                blocks.append(create_bullet_block(rf))
+                blocks.extend(create_bullet_block(rf))
                 
     elif stage_name == "market_research":
         tam = payload.get("tam_estimate", "")
@@ -196,22 +220,22 @@ def translate_artifact_to_notion_blocks(stage_name: str, payload: Dict[str, Any]
         sources = payload.get("sources", [])
         
         blocks.append(create_heading_block("2. Market Research", 2))
-        blocks.append(create_paragraph_block(f"TAM Estimate: {tam}"))
+        blocks.extend(create_paragraph_block(f"TAM Estimate: {tam}"))
         
         if competitors:
             blocks.append(create_heading_block("Key Competitors", 3))
             for comp in competitors:
-                blocks.append(create_bullet_block(f"{comp.get('name', '')}: {comp.get('description', '')} (Link: {comp.get('url', '')})"))
+                blocks.extend(create_bullet_block(f"{comp.get('name', '')}: {comp.get('description', '')} (Link: {comp.get('url', '')})"))
                 
         if trends:
             blocks.append(create_heading_block("Market Trends", 3))
             for trend in trends:
-                blocks.append(create_bullet_block(trend))
+                blocks.extend(create_bullet_block(trend))
                 
         if sources:
             blocks.append(create_heading_block("Sources Referenced", 3))
             for src in sources:
-                blocks.append(create_bullet_block(src))
+                blocks.extend(create_bullet_block(src))
                 
     elif stage_name == "product_manager":
         prob = payload.get("problem_statement", "")
@@ -220,23 +244,23 @@ def translate_artifact_to_notion_blocks(stage_name: str, payload: Dict[str, Any]
         phases = payload.get("roadmap_phases", [])
         
         blocks.append(create_heading_block("3. Product Requirement Document (PRD)", 2))
-        blocks.append(create_paragraph_block(f"Problem Statement: {prob}"))
+        blocks.extend(create_paragraph_block(f"Problem Statement: {prob}"))
         
         if stories:
             blocks.append(create_heading_block("User Stories", 3))
             for story in stories:
-                blocks.append(create_bullet_block(story))
+                blocks.extend(create_bullet_block(story))
                 
         if features:
             blocks.append(create_heading_block("Core Features", 3))
             for feat in features:
-                blocks.append(create_bullet_block(f"[{feat.get('priority', 'Medium')}] {feat.get('name', '')}: {feat.get('description', '')}"))
+                blocks.extend(create_bullet_block(f"[{feat.get('priority', 'Medium')}] {feat.get('name', '')}: {feat.get('description', '')}"))
                 
         if phases:
             blocks.append(create_heading_block("Roadmap Phases", 3))
             for phase in phases:
                 items_str = ", ".join(phase.get("items", []))
-                blocks.append(create_bullet_block(f"{phase.get('name', '')}: {items_str}"))
+                blocks.extend(create_bullet_block(f"{phase.get('name', '')}: {items_str}"))
                 
     elif stage_name == "architect":
         sql = payload.get("db_schema_sql", "")
@@ -245,20 +269,20 @@ def translate_artifact_to_notion_blocks(stage_name: str, payload: Dict[str, Any]
         notes = payload.get("system_design_notes", "")
         
         blocks.append(create_heading_block("4. System Architecture Specification", 2))
-        blocks.append(create_paragraph_block(f"Notes: {notes}"))
+        blocks.extend(create_paragraph_block(f"Notes: {notes}"))
         
         if sql:
             blocks.append(create_heading_block("Database SQL Schema", 3))
-            blocks.append(create_code_block(sql, "sql"))
+            blocks.extend(create_code_block(sql, "sql"))
             
         if mermaid:
             blocks.append(create_heading_block("Mermaid Diagram", 3))
-            blocks.append(create_code_block(mermaid, "mermaid"))
+            blocks.extend(create_code_block(mermaid, "mermaid"))
             
         if endpoints:
             blocks.append(create_heading_block("API Endpoints Contract", 3))
             for ep in endpoints:
-                blocks.append(create_bullet_block(f"{ep.get('method', 'GET')} {ep.get('path', '')} - {ep.get('description', '')}"))
+                blocks.extend(create_bullet_block(f"{ep.get('method', 'GET')} {ep.get('path', '')} - {ep.get('description', '')}"))
                 
     elif stage_name == "engineering_manager":
         issues = payload.get("issues", [])
@@ -270,13 +294,13 @@ def translate_artifact_to_notion_blocks(stage_name: str, payload: Dict[str, Any]
             blocks.append(create_heading_block("Sprints Plan", 3))
             for sp in sprints:
                 issues_str = ", ".join(sp.get("issue_titles", []))
-                blocks.append(create_bullet_block(f"{sp.get('name', '')}: {issues_str}"))
+                blocks.extend(create_bullet_block(f"{sp.get('name', '')}: {issues_str}"))
                 
         if issues:
             blocks.append(create_heading_block("GitHub Issues List", 3))
             for issue in issues:
                 labels_str = ", ".join(issue.get("labels", []))
-                blocks.append(create_bullet_block(f"Issue: '{issue.get('title', '')}' [Labels: {labels_str}] - {issue.get('body', '')}"))
+                blocks.extend(create_bullet_block(f"Issue: '{issue.get('title', '')}' [Labels: {labels_str}] - {issue.get('body', '')}"))
                 
     elif stage_name == "marketing":
         copy = payload.get("landing_copy", "")
@@ -287,14 +311,14 @@ def translate_artifact_to_notion_blocks(stage_name: str, payload: Dict[str, Any]
         
         if copy:
             blocks.append(create_heading_block("Landing Page Headline & Copy", 3))
-            blocks.append(create_paragraph_block(copy))
+            blocks.extend(create_paragraph_block(copy))
             
         if post:
             blocks.append(create_heading_block("LinkedIn Launch Post", 3))
-            blocks.append(create_paragraph_block(post))
+            blocks.extend(create_paragraph_block(post))
             
         if campaign:
             blocks.append(create_heading_block("Email Campaign Copy", 3))
-            blocks.append(create_paragraph_block(campaign))
+            blocks.extend(create_paragraph_block(campaign))
             
     return blocks

@@ -24,10 +24,10 @@ class Settings(BaseSettings):
     
     # Agent-Specific Models
     ADVISOR_MODEL: str = Field(default="")
-    RESEARCHER_MODEL: str = Field(default="")
+    RESEARCHER_MODEL: str = Field(default="meta-llama/llama-4-scout-17b-16e-instruct")
     PM_MODEL: str = Field(default="")
-    ARCHITECT_MODEL: str = Field(default="")
-    EM_MODEL: str = Field(default="")
+    ARCHITECT_MODEL: str = Field(default="z-ai/glm-5.1")
+    EM_MODEL: str = Field(default="z-ai/glm-5.1")
     MARKETING_MODEL: str = Field(default="")
     
     # Tool Configs

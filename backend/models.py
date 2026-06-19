@@ -1,3 +1,4 @@
+# models.py
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional, Annotated
 
@@ -15,8 +16,38 @@ def reduce_list(left: Optional[List[Any]], right: Optional[List[Any]]) -> List[A
             merged.append(item)
     return merged
 
+# --- Explicit Sub-Models for Structured LLM Outputs ---
+
+class Competitor(BaseModel):
+    name: str
+    description: str
+    url: str
+
+class Feature(BaseModel):
+    name: str
+    description: str
+    priority: str
+
+class RoadmapPhase(BaseModel):
+    name: str
+    items: List[str]
+
+class ApiEndpoint(BaseModel):
+    method: str
+    path: str
+    description: str
+
+class GitHubIssue(BaseModel):
+    title: str
+    body: str
+    labels: List[str]
+
+class Sprint(BaseModel):
+    name: str
+    issue_titles: List[str]
+
 # --- Agent Output Models ---
-# ... (same as before) ...
+
 class ValidationResult(BaseModel):
     verdict: str
     risk_score: float  # 0.0-1.0
@@ -25,25 +56,25 @@ class ValidationResult(BaseModel):
 
 class MarketResearchReport(BaseModel):
     tam_estimate: str
-    competitors: List[Dict[str, Any]]  # {name, description, url}
+    competitors: List[Competitor]
     trends: List[str]
     sources: List[str]
 
 class PRD(BaseModel):
     problem_statement: str
     user_stories: List[str]
-    features: List[Dict[str, Any]]  # {name, description, priority}
-    roadmap_phases: List[Dict[str, Any]]  # {name, items}
+    features: List[Feature]
+    roadmap_phases: List[RoadmapPhase]
 
 class ArchitectureSpec(BaseModel):
     db_schema_sql: str
     db_schema_mermaid: str
-    api_endpoints: List[Dict[str, Any]]  # {method, path, description}
+    api_endpoints: List[ApiEndpoint]
     system_design_notes: str
 
 class IssuesAndSprintPlan(BaseModel):
-    issues: List[Dict[str, Any]]  # {title, body, labels}
-    sprints: List[Dict[str, Any]]  # {name, issue_titles}
+    issues: List[GitHubIssue]
+    sprints: List[Sprint]
 
 class MarketingAssets(BaseModel):
     landing_copy: str

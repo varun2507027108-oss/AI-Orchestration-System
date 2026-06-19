@@ -1,9 +1,11 @@
 import sqlite3
 import json
+import threading
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 DB_PATH = "founder_os.db"
+db_lock = threading.Lock()
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -36,25 +38,25 @@ def init_db():
 
 def save_artifact(session_id: str, stage_name: str, payload: Dict[str, Any]) -> int:
     init_db()
-    conn = get_db_connection()
-    try:
-        # Find the maximum version for this session and stage
-        cursor = conn.execute(
-            "SELECT MAX(version) FROM artifacts WHERE session_id = ? AND stage_name = ?",
-            (session_id, stage_name)
-        )
-        row = cursor.fetchone()
-        max_version = row[0] if row and row[0] is not None else 0
-        new_version = max_version + 1
-        
-        conn.execute(
-            "INSERT INTO artifacts (session_id, stage_name, payload_json, version, created_at) VALUES (?, ?, ?, ?, ?)",
-            (session_id, stage_name, json.dumps(payload), new_version, datetime.now().isoformat())
-        )
-        conn.commit()
-        return new_version
-    finally:
-        conn.close()
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            cursor = conn.execute(
+                "SELECT MAX(version) FROM artifacts WHERE session_id = ? AND stage_name = ?",
+                (session_id, stage_name)
+            )
+            row = cursor.fetchone()
+            max_version = row[0] if row and row[0] is not None else 0
+            new_version = max_version + 1
+            
+            conn.execute(
+                "INSERT INTO artifacts (session_id, stage_name, payload_json, version, created_at) VALUES (?, ?, ?, ?, ?)",
+                (session_id, stage_name, json.dumps(payload), new_version, datetime.now().isoformat())
+            )
+            conn.commit()
+            return new_version
+        finally:
+            conn.close()
 
 def get_latest_artifact(session_id: str, stage_name: str) -> Optional[Dict[str, Any]]:
     init_db()
@@ -88,15 +90,16 @@ def get_latest_artifact_version(session_id: str, stage_name: str) -> int:
 
 def add_decision_log(session_id: str, stage_name: str, reasoning: str):
     init_db()
-    conn = get_db_connection()
-    try:
-        conn.execute(
-            "INSERT INTO decision_log (session_id, stage_name, reasoning, created_at) VALUES (?, ?, ?, ?)",
-            (session_id, stage_name, reasoning, datetime.now().isoformat())
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            conn.execute(
+                "INSERT INTO decision_log (session_id, stage_name, reasoning, created_at) VALUES (?, ?, ?, ?)",
+                (session_id, stage_name, reasoning, datetime.now().isoformat())
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 def get_decision_log(session_id: str) -> List[Dict[str, Any]]:
     init_db()

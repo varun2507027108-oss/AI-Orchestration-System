@@ -11,8 +11,6 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import interrupt
 from langgraph.errors import GraphInterrupt
 from groq import AsyncGroq
-import google.generativeai as genai
-from openai import AsyncOpenAI
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config import settings
@@ -39,7 +37,17 @@ def update_stage(stages: Optional[Dict[str, Any]], stage_name: str, status: str,
     current[stage_name] = {"status": status, "version": version}
     return current
 
-# --- LLM Query Helpers with Exponential Backoff Retry ---
+def safe_serialize(obj) -> str:
+    """Safely serialize a Pydantic model or dictionary to JSON string."""
+    if obj is None:
+        return "None"
+    if hasattr(obj, 'model_dump'):
+        return json.dumps(obj.model_dump())
+    elif isinstance(obj, dict):
+        return json.dumps(obj)
+    return str(obj)
+
+# --- LLM Query Helpers ---
 
 async def call_with_retry(func, *args, **kwargs):
     for attempt in range(3):
@@ -56,16 +64,14 @@ async def query_groq(system_instruction: str, user_prompt: str, schema: Any, api
     if not key_to_use:
         raise ValueError("GROQ_API_KEY is not configured.")
     
-    model_to_use = model or settings.GROQ_MODEL or "llama-3.3-70b-versatile"
-    client = AsyncGroq(api_key=key_to_use)
-    prompt = f"{user_prompt}\n\nReturn a JSON object matching this schema:\n{schema.schema_json()}"
+    model_to_use = model or "llama-3.3-70b-versatile"
+    client = AsyncGroq(api_key=key_to_use, timeout=30.0)
     
     async def _call():
-        await asyncio.sleep(1.0)  # Rate limit safety delay
         response = await client.chat.completions.create(
             messages=[
                 {"role": "system", "content": system_instruction},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": user_prompt}
             ],
             model=model_to_use,
             response_format={"type": "json_object"},
@@ -78,65 +84,6 @@ async def query_groq(system_instruction: str, user_prompt: str, schema: Any, api
         
     return await call_with_retry(_call)
 
-async def query_gemini(system_instruction: str, user_prompt: str, schema: Any, api_key: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
-    key_to_use = api_key or settings.GEMINI_API_KEY
-    if not key_to_use:
-        raise ValueError("GEMINI_API_KEY is not configured.")
-    
-    model_to_use = model or settings.GEMINI_MODEL or "gemini-2.5-flash"
-    genai.configure(api_key=key_to_use)
-    generative_model = genai.GenerativeModel(
-        model_name=model_to_use,
-        system_instruction=system_instruction
-    )
-    
-    async def _call():
-        await asyncio.sleep(1.0)  # Rate limit safety delay
-        response = await generative_model.generate_content_async(
-            user_prompt,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json",
-                response_schema=schema,
-                temperature=0.1
-            )
-        )
-        content = response.text
-        parsed = json.loads(content)
-        return parsed
-        
-    return await call_with_retry(_call)
-
-async def query_nim(system_instruction: str, user_prompt: str, schema: Any, api_key: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
-    key_to_use = api_key or settings.NVIDIA_NIM_API_KEY
-    if not key_to_use:
-        raise ValueError("NVIDIA_NIM_API_KEY is not configured.")
-        
-    model_to_use = model or settings.NVIDIA_NIM_MODEL or "nvidia/llama-3.1-nemotron-70b-instruct"
-    client = AsyncOpenAI(
-        base_url="https://integrate.api.nvidia.com/v1",
-        api_key=key_to_use
-    )
-    
-    prompt = f"{user_prompt}\n\nReturn a JSON object matching this schema:\n{schema.schema_json()}"
-    
-    async def _call():
-        await asyncio.sleep(1.0)  # Rate limit safety delay
-        response = await client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": prompt}
-            ],
-            model=model_to_use,
-            response_format={"type": "json_object"},
-            temperature=0.1
-        )
-        content = response.choices[0].message.content
-        parsed = json.loads(content)
-        schema(**parsed)
-        return parsed
-        
-    return await call_with_retry(_call)
-
 # --- Node Implementations ---
 
 async def startup_advisor_node(state: GraphState) -> Dict[str, Any]:
@@ -144,86 +91,73 @@ async def startup_advisor_node(state: GraphState) -> Dict[str, Any]:
     failed_stages = list(state.failed_stages or [])
     stages["startup_advisor"] = {"status": "running", "version": 0}
     
-    # Check if we are resuming from a continue decision
     if state.gate_decision == "continue":
-        add_decision_log(state.session_id, "startup_advisor", "Idea approved to continue by founder.")
+        await asyncio.to_thread(add_decision_log, state.session_id, "startup_advisor", "Idea approved to continue by founder.")
+        latest_v = await asyncio.to_thread(get_latest_artifact_version, state.session_id, "startup_advisor")
         return {
             "gate_decision": None,
             "gate_resolved": True,
             "status": "running",
-            "stages": {"startup_advisor": {"status": "complete", "version": get_latest_artifact_version(state.session_id, "startup_advisor")}}
+            "stages": {"startup_advisor": {"status": "complete", "version": latest_v}}
         }
 
-    # Determine what idea to validate
     idea_to_validate = state.revised_idea if state.gate_decision == "revise" else state.idea
     
     system_instruction = (
         "You are the Startup Advisor. Your task is to evaluate the founder's startup idea. "
         "Assess the risk level (risk_score between 0.0 and 1.0), verdict (e.g. Approved, Needs Revision), "
-        "provide detailed reasoning, and list any red flags. You must return a JSON object matching the ValidationResult schema."
+        "provide detailed reasoning, and list any red flags. "
+        "You must return a JSON object with these exact keys: "
+        '"verdict" (string), "risk_score" (number), "reasoning" (string), "red_flags" (array of strings).'
     )
     prompt = f"Evaluate this startup idea: '{idea_to_validate}' for a project named '{state.startup_name}'."
     
-    # Check if we already validated this specific idea in a previous execution of this node
-    logs = get_decision_log(state.session_id)
+    logs = await asyncio.to_thread(get_decision_log, state.session_id)
     is_resume = any(f"Validated idea '{idea_to_validate}':" in l["reasoning"] for l in logs)
     
     result = None
     version = 0
     
     if is_resume:
-        art_data = get_latest_artifact(state.session_id, "startup_advisor")
+        art_data = await asyncio.to_thread(get_latest_artifact, state.session_id, "startup_advisor")
         if art_data:
             result = ValidationResult(**art_data)
-            version = get_latest_artifact_version(state.session_id, "startup_advisor")
+            version = await asyncio.to_thread(get_latest_artifact_version, state.session_id, "startup_advisor")
         else:
             is_resume = False
 
     try:
         if not is_resume:
-            api_key = settings.ADVISOR_API_KEY or settings.GROQ_API_KEY
-            # Check if we are running in dry-run or mock mode (e.g. during skeleton testing or empty key)
+            api_key = settings.GROQ_API_KEY
             if not api_key:
-                is_risky = "risk" in idea_to_validate.lower() or "fail" in idea_to_validate.lower() or "trigger_gate" in idea_to_validate.lower()
-                if is_risky:
-                    result = ValidationResult(
-                        verdict="Needs Revision",
-                        risk_score=0.8,
-                        reasoning="Startup idea contains high-risk concepts (Mocked).",
-                        red_flags=["High risk keywords detected", "Target market competition"]
-                    )
-                else:
-                    result = ValidationResult(
-                        verdict="Excellent idea",
-                        risk_score=0.2,
-                        reasoning="Straightforward business model and target (Mocked).",
-                        red_flags=[]
-                    )
+                result = ValidationResult(
+                    verdict="Excellent idea",
+                    risk_score=0.2,
+                    reasoning="Straightforward business model and target (Mocked).",
+                    red_flags=[]
+                )
             else:
-                result_dict = await query_groq(system_instruction, prompt, ValidationResult, api_key=api_key, model=settings.ADVISOR_MODEL)
+                result_dict = await query_groq(system_instruction, prompt, ValidationResult, api_key=api_key, model="llama-3.3-70b-versatile")
                 result = ValidationResult(**result_dict)
                 
-            version = save_artifact(state.session_id, "startup_advisor", result.dict())
-            add_decision_log(state.session_id, "startup_advisor", f"Validated idea '{idea_to_validate}': Verdict={result.verdict}, Risk={result.risk_score}")
+            version = await asyncio.to_thread(save_artifact, state.session_id, "startup_advisor", result.model_dump())
+            await asyncio.to_thread(add_decision_log, state.session_id, "startup_advisor", f"Validated idea '{idea_to_validate}': Verdict={result.verdict}, Risk={result.risk_score}")
         
-        # Check if we need to trigger the gate
-        is_high_risk = result.risk_score > 0.6 or len(result.red_flags) > 0
+        is_high_risk = result.risk_score > 0.7 or len(result.red_flags) >= 3
         
         if is_high_risk:
             stages["startup_advisor"] = {"status": "awaiting_gate", "version": version}
-            
             user_response = interrupt({
                 "risk_score": result.risk_score,
                 "red_flags": result.red_flags,
                 "verdict": result.verdict,
                 "reasoning": result.reasoning
             })
-            
             decision = user_response.get("decision")
             revised_idea_val = user_response.get("revised_idea", "")
             
             if decision == "revise":
-                add_decision_log(state.session_id, "startup_advisor", f"Founder requested revision with new idea: '{revised_idea_val}'")
+                await asyncio.to_thread(add_decision_log, state.session_id, "startup_advisor", f"Founder requested revision with new idea: '{revised_idea_val}'")
                 return {
                     "idea": revised_idea_val,
                     "gate_decision": "revise",
@@ -233,7 +167,7 @@ async def startup_advisor_node(state: GraphState) -> Dict[str, Any]:
                     "status": "running"
                 }
             else:
-                add_decision_log(state.session_id, "startup_advisor", "Founder chose to continue despite warnings.")
+                await asyncio.to_thread(add_decision_log, state.session_id, "startup_advisor", "Founder chose to continue despite warnings.")
                 return {
                     "gate_decision": "continue",
                     "startup_advisor": result,
@@ -292,13 +226,15 @@ async def market_research_node(state: GraphState) -> Dict[str, Any]:
     system_instruction = (
         "You are the Market Research Agent. Based on the web search results provided, "
         "estimate the TAM (Total Addressable Market), list top competitors, outline key industry trends, "
-        "and list your sources. Every competitor must have a name, description, and source url. "
-        "You must output a valid JSON object matching the MarketResearchReport schema."
+        "and list your sources. Every competitor must have a name, description, and url. "
+        "You must output a valid JSON object with these exact keys: "
+        '"tam_estimate" (string), "competitors" (array of objects with name, description, url), '
+        '"trends" (array of strings), "sources" (array of strings).'
     )
     prompt = f"Startup Idea: '{idea_val}'\n\nSearch Results:\n{search_results_str}"
     
     try:
-        api_key = settings.RESEARCHER_API_KEY or settings.GROQ_API_KEY
+        api_key = settings.GROQ_API_KEY
         if not api_key:
             report = MarketResearchReport(
                 tam_estimate="$500M",
@@ -306,15 +242,15 @@ async def market_research_node(state: GraphState) -> Dict[str, Any]:
                 trends=["Rising adoption of automation (Mocked)"],
                 sources=sources
             )
-            report_dict = report.dict()
+            report_dict = report.model_dump()
         else:
-            report_dict = await query_groq(system_instruction, prompt, MarketResearchReport, api_key=api_key, model=settings.RESEARCHER_MODEL)
+            report_dict = await query_groq(system_instruction, prompt, MarketResearchReport, api_key=api_key, model="llama-3.3-70b-versatile")
             if not report_dict.get("sources"):
                 report_dict["sources"] = sources
             report = MarketResearchReport(**report_dict)
             
-        version = save_artifact(state.session_id, "market_research", report_dict)
-        add_decision_log(state.session_id, "market_research", "Successfully completed market research report using web search.")
+        version = await asyncio.to_thread(save_artifact, state.session_id, "market_research", report_dict)
+        await asyncio.to_thread(add_decision_log, state.session_id, "market_research", "Successfully completed market research report using web search.")
         return {"market_research": report, "stages": {"market_research": {"status": "complete", "version": version}}}
     except Exception as e:
         logger.exception(f"Error in market_research_node: {e}")
@@ -329,17 +265,20 @@ async def product_manager_node(state: GraphState) -> Dict[str, Any]:
     
     idea_val = state.idea
     market_report = state.market_research
-    market_report_str = json.dumps(market_report.dict()) if market_report else "No market report available."
+    market_report_str = safe_serialize(market_report) if market_report else "No market report available."
     
     system_instruction = (
         "You are the Product Manager. Your task is to write a PRD based on the startup idea and the market research report. "
         "Include a clear problem statement, user stories, a list of features with priority, and roadmap phases. "
-        "You must output a valid JSON object matching the PRD schema."
+        "You must output a valid JSON object with these exact keys: "
+        '"problem_statement" (string), "user_stories" (array of strings), '
+        '"features" (array of objects with name, description, priority), '
+        '"roadmap_phases" (array of objects with name, items).'
     )
     prompt = f"Startup Idea: '{idea_val}'\n\nMarket Research Report:\n{market_report_str}"
     
     try:
-        api_key = settings.PM_API_KEY or settings.GEMINI_API_KEY
+        api_key = settings.GROQ_API_KEY
         if not api_key:
             prd = PRD(
                 problem_statement=f"Simplify setup for idea: {idea_val} (Mocked)",
@@ -347,13 +286,13 @@ async def product_manager_node(state: GraphState) -> Dict[str, Any]:
                 features=[{"name": "Skeletal Pipeline", "description": "Validates graph state", "priority": "High"}],
                 roadmap_phases=[{"name": "Phase 1", "items": ["Skeletal Pipeline"]}]
             )
-            prd_dict = prd.dict()
+            prd_dict = prd.model_dump()
         else:
-            prd_dict = await query_gemini(system_instruction, prompt, PRD, api_key=api_key, model=settings.PM_MODEL)
+            prd_dict = await query_groq(system_instruction, prompt, PRD, api_key=api_key, model="llama-3.3-70b-versatile")
             prd = PRD(**prd_dict)
             
-        version = save_artifact(state.session_id, "product_manager", prd_dict)
-        add_decision_log(state.session_id, "product_manager", "Compiled and generated Product Requirement Document (PRD).")
+        version = await asyncio.to_thread(save_artifact, state.session_id, "product_manager", prd_dict)
+        await asyncio.to_thread(add_decision_log, state.session_id, "product_manager", "Compiled and generated Product Requirement Document (PRD).")
         return {"product_manager": prd, "stages": {"product_manager": {"status": "complete", "version": version}}}
     except Exception as e:
         logger.exception(f"Error in product_manager_node: {e}")
@@ -367,17 +306,20 @@ async def architect_node(state: GraphState) -> Dict[str, Any]:
     stages["architect"] = {"status": "running", "version": 0}
     
     prd = state.product_manager
-    prd_str = json.dumps(prd.dict()) if prd else "No PRD available."
+    prd_str = safe_serialize(prd) if prd else "No PRD available."
     
     system_instruction = (
         "You are the Software Architect. Create an architecture specification based on the PRD. "
         "Generate the database schema in SQL, the schema in Mermaid syntax, the list of API endpoints (method, path, description), "
-        "and system design notes. You must output a valid JSON object matching the ArchitectureSpec schema."
+        "and system design notes. "
+        "You must output a valid JSON object with these exact keys: "
+        '"db_schema_sql" (string), "db_schema_mermaid" (string), '
+        '"api_endpoints" (array of objects with method, path, description), "system_design_notes" (string).'
     )
     prompt = f"Product Requirement Document (PRD):\n{prd_str}"
     
     try:
-        api_key = settings.ARCHITECT_API_KEY or settings.NVIDIA_NIM_API_KEY
+        api_key = settings.GROQ_API_KEY
         if not api_key:
             spec = ArchitectureSpec(
                 db_schema_sql="CREATE TABLE sessions (id TEXT, idea TEXT);",
@@ -385,13 +327,13 @@ async def architect_node(state: GraphState) -> Dict[str, Any]:
                 api_endpoints=[{"method": "POST", "path": "/sessions", "description": "Create session"}],
                 system_design_notes="Utilizing SQLite database and FastAPI backend (Mocked)."
             )
-            spec_dict = spec.dict()
+            spec_dict = spec.model_dump()
         else:
-            spec_dict = await query_nim(system_instruction, prompt, ArchitectureSpec, api_key=api_key, model=settings.ARCHITECT_MODEL)
+            spec_dict = await query_groq(system_instruction, prompt, ArchitectureSpec, api_key=api_key, model="llama-3.3-70b-versatile")
             spec = ArchitectureSpec(**spec_dict)
             
-        version = save_artifact(state.session_id, "architect", spec_dict)
-        add_decision_log(state.session_id, "architect", "Generated database schema SQL and system design specification.")
+        version = await asyncio.to_thread(save_artifact, state.session_id, "architect", spec_dict)
+        await asyncio.to_thread(add_decision_log, state.session_id, "architect", "Generated database schema SQL and system design specification.")
         return {"architect": spec, "stages": {"architect": {"status": "complete", "version": version}}}
     except Exception as e:
         logger.exception(f"Error in architect_node: {e}")
@@ -405,39 +347,40 @@ async def engineering_manager_node(state: GraphState) -> Dict[str, Any]:
     stages["engineering_manager"] = {"status": "running", "version": 0}
     
     spec = state.architect
-    spec_str = json.dumps(spec.dict()) if spec else "No architecture spec available."
+    spec_str = safe_serialize(spec) if spec else "No architecture spec available."
     
     system_instruction = (
         "You are the Engineering Manager. Build a sprint plan and list of GitHub issues based on the architecture specification. "
         "Each issue should have a title, body, and labels. Group issues into named sprints. "
-        "You must output a valid JSON object matching the IssuesAndSprintPlan schema."
+        "You must output a valid JSON object with these exact keys: "
+        '"issues" (array of objects with title, body, labels), '
+        '"sprints" (array of objects with name, issue_titles).'
     )
     prompt = f"Architecture Specification:\n{spec_str}"
     
     try:
-        api_key = settings.EM_API_KEY or settings.GROQ_API_KEY
+        api_key = settings.GROQ_API_KEY
         if not api_key:
             plan = IssuesAndSprintPlan(
                 issues=[{"title": "Setup SQLite Schema", "body": "Create schemas defined in architecture spec.", "labels": ["db", "setup"]}],
                 sprints=[{"name": "Sprint 1", "issue_titles": ["Setup SQLite Schema"]}]
             )
-            plan_dict = plan.dict()
+            plan_dict = plan.model_dump()
         else:
-            plan_dict = await query_groq(system_instruction, prompt, IssuesAndSprintPlan, api_key=api_key, model=settings.EM_MODEL)
+            plan_dict = await query_groq(system_instruction, prompt, IssuesAndSprintPlan, api_key=api_key, model="llama-3.3-70b-versatile")
             plan = IssuesAndSprintPlan(**plan_dict)
             
-        version = save_artifact(state.session_id, "engineering_manager", plan_dict)
-        add_decision_log(state.session_id, "engineering_manager", "Compiled issues backlog and sprint timeline.")
+        version = await asyncio.to_thread(save_artifact, state.session_id, "engineering_manager", plan_dict)
+        await asyncio.to_thread(add_decision_log, state.session_id, "engineering_manager", "Compiled issues backlog and sprint timeline.")
         
-        # Trigger GitHub integration if repo is set
         if state.github_repo:
             try:
                 from tools.github import create_github_issues_bulk
                 await create_github_issues_bulk(state.github_repo, plan.issues)
-                add_decision_log(state.session_id, "engineering_manager", f"Successfully synced issues to GitHub repository: {state.github_repo}")
+                await asyncio.to_thread(add_decision_log, state.session_id, "engineering_manager", f"Successfully synced issues to GitHub repository: {state.github_repo}")
             except Exception as github_err:
                 logger.warning(f"Failed to sync issues to GitHub: {github_err}")
-                add_decision_log(state.session_id, "engineering_manager", f"Failed to sync issues to GitHub: {github_err}")
+                await asyncio.to_thread(add_decision_log, state.session_id, "engineering_manager", f"Failed to sync issues to GitHub: {github_err}")
                 
         return {"engineering_manager": plan, "stages": {"engineering_manager": {"status": "complete", "version": version}}}
     except Exception as e:
@@ -453,30 +396,32 @@ async def marketing_node(state: GraphState) -> Dict[str, Any]:
     
     idea_val = state.idea
     prd = state.product_manager
-    prd_str = json.dumps(prd.dict()) if prd else "No PRD available."
+    prd_str = safe_serialize(prd) if prd else "No PRD available."
     
     system_instruction = (
         "You are the Marketing Agent. Generate launch assets based on the startup idea and the PRD. "
         "Create landing page copy, a LinkedIn launch post, and an email campaign copy. "
-        "You must output a valid JSON object matching the MarketingAssets schema."
+        "You must output a valid JSON object with these exact keys: "
+        '"landing_copy" (string), "linkedin_post" (string), "email_campaign" (string). '
+        "Do not nest these inside other objects; they must be plain strings at the top level."
     )
     prompt = f"Startup Idea: '{idea_val}'\n\nProduct Requirement Document (PRD):\n{prd_str}"
     
     try:
-        api_key = settings.MARKETING_API_KEY or settings.GROQ_API_KEY
+        api_key = settings.GROQ_API_KEY
         if not api_key:
             assets = MarketingAssets(
                 landing_copy="AI Founder OS: Automate your product validation.",
                 linkedin_post="Accelerating startup workflows with AI Founder OS!",
                 email_campaign="Introducing automated pipeline for startup validation."
             )
-            assets_dict = assets.dict()
+            assets_dict = assets.model_dump()
         else:
-            assets_dict = await query_groq(system_instruction, prompt, MarketingAssets, api_key=api_key, model=settings.MARKETING_MODEL)
+            assets_dict = await query_groq(system_instruction, prompt, MarketingAssets, api_key=api_key, model="llama-3.3-70b-versatile")
             assets = MarketingAssets(**assets_dict)
             
-        version = save_artifact(state.session_id, "marketing", assets_dict)
-        add_decision_log(state.session_id, "marketing", "Generated promotional copy and launch assets.")
+        version = await asyncio.to_thread(save_artifact, state.session_id, "marketing", assets_dict)
+        await asyncio.to_thread(add_decision_log, state.session_id, "marketing", "Generated promotional copy and launch assets.")
         return {"marketing": assets, "stages": {"marketing": {"status": "complete", "version": version}}}
     except Exception as e:
         logger.exception(f"Error in marketing_node: {e}")
@@ -485,9 +430,9 @@ async def marketing_node(state: GraphState) -> Dict[str, Any]:
         return {"stages": {"marketing": {"status": "failed", "version": 0}}, "failed_stages": failed_stages}
 
 async def join_node(state: GraphState) -> Dict[str, Any]:
-    # Marks session complete once both branches join
+    if state.failed_stages:
+        return {"status": "failed"}
     return {"status": "complete"}
-
 
 # --- Conditional Routing ---
 
@@ -496,13 +441,11 @@ def router_after_advisor(state: GraphState) -> str:
         return "startup_advisor"
     return "market_research"
 
-
 # --- Build StateGraph ---
 
 def create_graph(checkpointer=None):
     workflow = StateGraph(GraphState)
     
-    # Add nodes
     workflow.add_node("startup_advisor", startup_advisor_node)
     workflow.add_node("market_research", market_research_node)
     workflow.add_node("product_manager", product_manager_node)
@@ -511,10 +454,7 @@ def create_graph(checkpointer=None):
     workflow.add_node("marketing", marketing_node)
     workflow.add_node("join", join_node)
     
-    # Add edges
     workflow.add_edge(START, "startup_advisor")
-    
-    # Conditional Edge
     workflow.add_conditional_edges(
         "startup_advisor",
         router_after_advisor,
@@ -523,20 +463,12 @@ def create_graph(checkpointer=None):
             "market_research": "market_research"
         }
     )
-    
     workflow.add_edge("market_research", "product_manager")
-    
-    # Parallel branching
     workflow.add_edge("product_manager", "architect")
     workflow.add_edge("product_manager", "marketing")
-    
-    # Architect branch continues to EM
     workflow.add_edge("architect", "engineering_manager")
-    
-    # Both branches join
     workflow.add_edge("engineering_manager", "join")
     workflow.add_edge("marketing", "join")
-    
     workflow.add_edge("join", END)
     
     return workflow.compile(checkpointer=checkpointer)

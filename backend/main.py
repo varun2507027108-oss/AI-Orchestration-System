@@ -36,20 +36,13 @@ class GateDecisionRequest(BaseModel):
 class ExportRequest(BaseModel):
     target: str  # "pdf" | "notion"
 
-
 # Active sessions registry to handle race conditions on quick state queries
 ACTIVE_SESSIONS: Dict[str, Dict[str, Any]] = {}
-
-
 
 # Lifespan context manager for LangGraph SqliteSaver checkpointer
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize DB
     init_db()
-    
-    # Initialize the LangGraph checkpoint saver
-    # Store it in app.state so handlers can access the compiled graph
     async with init_saver("checkpoints.db") as saver:
         app.state.saver = saver
         app.state.graph = create_graph(saver)
@@ -63,10 +56,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS with ALLOWED_ORIGIN env var support
+# Enable CORS
 origins = [o.strip() for o in settings.ALLOWED_ORIGIN.split(",") if o.strip()]
 if not origins:
-    origins = ["*"]
+    origins = ["http://localhost:3000"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,8 +73,6 @@ app.add_middleware(
 os.makedirs("exports", exist_ok=True)
 app.mount("/exports", StaticFiles(directory="exports"), name="exports")
 
-
-# Background task helper to execute or resume graph in background
 async def run_graph_in_background(graph: Any, initial_state: Dict[str, Any], config: Dict[str, Any]):
     try:
         await graph.ainvoke(initial_state, config=config)
@@ -96,9 +87,6 @@ async def resume_graph_in_background(graph: Any, command: Command, config: Dict[
     except Exception as e:
         logger.exception(f"Error resuming graph in background for thread {config['configurable']['thread_id']}: {e}")
 
-
-# Endpoints
-
 @app.post("/sessions")
 async def create_session(payload: CreateSessionRequest):
     session_id = str(uuid.uuid4())
@@ -110,7 +98,6 @@ async def create_session(payload: CreateSessionRequest):
         "github_repo": payload.github_repo
     }
 
-    # Set up the initial state for the graph
     initial_state = {
         "session_id": session_id,
         "startup_name": payload.startup_name,
@@ -128,12 +115,9 @@ async def create_session(payload: CreateSessionRequest):
     }
 
     config = {"configurable": {"thread_id": session_id}}
-    
-    # Run the graph in the background
     asyncio.create_task(run_graph_in_background(app.state.graph, initial_state, config))
 
     return {"session_id": session_id}
-
 
 @app.get("/sessions/{id}")
 async def get_session(id: str):
@@ -145,7 +129,6 @@ async def get_session(id: str):
         details = ACTIVE_SESSIONS.get(id)
         if not details:
             raise HTTPException(status_code=404, detail="Session not found")
-        # Populate initial/pending state values from registry
         state_values = {
             "session_id": id,
             "startup_name": details["startup_name"],
@@ -163,16 +146,12 @@ async def get_session(id: str):
             "failed_stages": []
         }
     
-    # Determine the status and active stage
     status = state_values.get("status", "running")
-    
-    # Check if there is an active interrupt (interrupted at the gate)
     is_interrupted = len(snapshot.tasks) > 0 and any(t.interrupts for t in snapshot.tasks)
     
     gate_payload = None
     if is_interrupted:
         status = "awaiting_gate"
-        # Extract the interrupt payload (value passed to interrupt())
         for task in snapshot.tasks:
             if task.interrupts:
                 gate_payload = task.interrupts[0].value
@@ -180,7 +159,6 @@ async def get_session(id: str):
     elif not snapshot.next and status == "running" and snapshot.values:
         status = "complete"
 
-    # Determine active stage
     active_stage = None
     if status == "running":
         stages_dict = state_values.get("stages", {})
@@ -191,11 +169,10 @@ async def get_session(id: str):
         if not active_stage and snapshot.next:
             active_stage = snapshot.next[0]
 
-    # Gather completed stage artifacts from the database
     stages_list = ["startup_advisor", "market_research", "product_manager", "architect", "engineering_manager", "marketing"]
     artifacts_dict = {}
     for s in stages_list:
-        art = get_latest_artifact(id, s)
+        art = await asyncio.to_thread(get_latest_artifact, id, s)
         if art:
             artifacts_dict[s] = art
 
@@ -212,7 +189,6 @@ async def get_session(id: str):
         "artifacts": artifacts_dict
     }
 
-
 @app.post("/sessions/{id}/gate-decision")
 async def post_gate_decision(id: str, payload: GateDecisionRequest):
     config = {"configurable": {"thread_id": id}}
@@ -221,7 +197,6 @@ async def post_gate_decision(id: str, payload: GateDecisionRequest):
     if not snapshot.values and id not in ACTIVE_SESSIONS:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Check if the graph is currently awaiting a gate decision
     is_interrupted = len(snapshot.tasks) > 0 and any(t.interrupts for t in snapshot.tasks)
     if not is_interrupted:
         raise HTTPException(status_code=400, detail="Session is not currently awaiting a gate decision")
@@ -229,12 +204,10 @@ async def post_gate_decision(id: str, payload: GateDecisionRequest):
     if payload.decision == "revise" and not payload.revised_idea:
         raise HTTPException(status_code=422, detail="revised_idea is required when decision is 'revise'")
 
-    # Resume the graph in the background
     resume_command = Command(resume={"decision": payload.decision, "revised_idea": payload.revised_idea})
     asyncio.create_task(resume_graph_in_background(app.state.graph, resume_command, config))
 
     return {"status": "success"}
-
 
 @app.get("/sessions/{id}/artifacts/{stage}")
 async def get_stage_artifact(id: str, stage: str):
@@ -242,19 +215,16 @@ async def get_stage_artifact(id: str, stage: str):
     if stage not in valid_stages:
         raise HTTPException(status_code=400, detail=f"Invalid stage name. Must be one of {valid_stages}")
 
-    artifact = get_latest_artifact(id, stage)
+    artifact = await asyncio.to_thread(get_latest_artifact, id, stage)
     if not artifact:
         raise HTTPException(status_code=404, detail=f"Artifact not found for stage: {stage}")
 
     return artifact
 
-
 @app.get("/sessions/{id}/decision-log")
 async def get_session_decision_log(id: str):
-    # Retrieve logs of reasoning and actions
-    logs = get_decision_log(id)
+    logs = await asyncio.to_thread(get_decision_log, id)
     return logs
-
 
 @app.post("/sessions/{id}/export")
 async def export_session(id: str, payload: ExportRequest):
@@ -267,11 +237,10 @@ async def export_session(id: str, payload: ExportRequest):
     state_values = snapshot.values
     startup_name = state_values.get("startup_name", "Startup")
 
-    # Gather completed stage artifacts from the database
     stages_list = ["startup_advisor", "market_research", "product_manager", "architect", "engineering_manager", "marketing"]
     artifacts_dict = {}
     for s in stages_list:
-        art = get_latest_artifact(id, s)
+        art = await asyncio.to_thread(get_latest_artifact, id, s)
         if art:
             artifacts_dict[s] = art
 
@@ -280,9 +249,9 @@ async def export_session(id: str, payload: ExportRequest):
 
     if payload.target == "pdf":
         try:
-            pdf_path = export_to_pdf(startup_name, id, artifacts_dict, output_dir="exports")
+            # Wrap synchronous PDF generation in a thread to avoid blocking the event loop
+            pdf_path = await asyncio.to_thread(export_to_pdf, startup_name, id, artifacts_dict, output_dir="exports")
             filename = os.path.basename(pdf_path)
-            # Create a clean local download URL pointing to our statically mounted files
             download_url = f"/exports/{filename}"
             return {
                 "status": "success",
@@ -295,12 +264,10 @@ async def export_session(id: str, payload: ExportRequest):
 
     elif payload.target == "notion":
         try:
-            # 1. Create a parent page inside the Notion database
             page_id = await create_notion_page(startup_name, id)
             if not page_id:
                 raise HTTPException(status_code=502, detail="Failed to create parent Notion page. Check NOTION_TOKEN and NOTION_DATABASE_ID configuration.")
 
-            # 2. Append block content for each completed artifact
             all_blocks = []
             for stage_name in stages_list:
                 payload_data = artifacts_dict.get(stage_name)
