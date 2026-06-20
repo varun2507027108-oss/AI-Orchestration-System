@@ -60,33 +60,35 @@ def save_artifact(session_id: str, stage_name: str, payload: Dict[str, Any]) -> 
 
 def get_latest_artifact(session_id: str, stage_name: str) -> Optional[Dict[str, Any]]:
     init_db()
-    conn = get_db_connection()
-    try:
-        cursor = conn.execute(
-            "SELECT payload_json FROM artifacts WHERE session_id = ? AND stage_name = ? ORDER BY version DESC LIMIT 1",
-            (session_id, stage_name)
-        )
-        row = cursor.fetchone()
-        if row:
-            return json.loads(row["payload_json"])
-        return None
-    finally:
-        conn.close()
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            cursor = conn.execute(
+                "SELECT payload_json FROM artifacts WHERE session_id = ? AND stage_name = ? ORDER BY version DESC LIMIT 1",
+                (session_id, stage_name)
+            )
+            row = cursor.fetchone()
+            if row:
+                return json.loads(row["payload_json"])
+            return None
+        finally:
+            conn.close()
 
 def get_latest_artifact_version(session_id: str, stage_name: str) -> int:
     init_db()
-    conn = get_db_connection()
-    try:
-        cursor = conn.execute(
-            "SELECT MAX(version) FROM artifacts WHERE session_id = ? AND stage_name = ?",
-            (session_id, stage_name)
-        )
-        row = cursor.fetchone()
-        if row and row[0] is not None:
-            return row[0]
-        return 0
-    finally:
-        conn.close()
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            cursor = conn.execute(
+                "SELECT MAX(version) FROM artifacts WHERE session_id = ? AND stage_name = ?",
+                (session_id, stage_name)
+            )
+            row = cursor.fetchone()
+            if row and row[0] is not None:
+                return row[0]
+            return 0
+        finally:
+            conn.close()
 
 def add_decision_log(session_id: str, stage_name: str, reasoning: str):
     init_db()
@@ -103,13 +105,14 @@ def add_decision_log(session_id: str, stage_name: str, reasoning: str):
 
 def get_decision_log(session_id: str) -> List[Dict[str, Any]]:
     init_db()
-    conn = get_db_connection()
-    try:
-        cursor = conn.execute(
-            "SELECT stage_name, reasoning, created_at FROM decision_log WHERE session_id = ? ORDER BY created_at ASC",
-            (session_id,)
-        )
-        rows = cursor.fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        conn.close()
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            cursor = conn.execute(
+                "SELECT stage_name, reasoning, created_at FROM decision_log WHERE session_id = ? ORDER BY created_at ASC",
+                (session_id,)
+            )
+            rows = cursor.fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()

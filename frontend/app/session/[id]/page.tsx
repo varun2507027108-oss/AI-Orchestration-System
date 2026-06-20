@@ -142,8 +142,8 @@ function PipelineView({ stages }: { stages: Record<string, any> }) {
         <span className="text-[10px] text-text-muted uppercase tracking-widest font-bold">Workflow DAG</span>
       </div>
 
-      <div className="w-full max-w-5xl mx-auto overflow-x-auto pb-4 hide-scrollbar">
-        <div className="flex flex-col md:flex-row items-center justify-center w-full min-w-max md:min-w-0">
+      <div className="w-full max-w-full mx-auto overflow-x-auto pb-4 hide-scrollbar">
+        <div className="flex flex-col md:flex-row items-center justify-start xl:justify-center w-full md:w-max mx-auto px-4 md:px-8">
           {/* Left part: Advisor -> Market Res -> Product Manager */}
           <div className="flex flex-col md:flex-row items-center">
             <PipelineNode id="startup_advisor" name="Advisor" status={sA} delay={0} />

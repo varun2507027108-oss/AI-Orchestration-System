@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class CreateSessionRequest(BaseModel):
     startup_name: str
     idea: str
-    github_repo: str
+    github_repo: Optional[str] = ""
 
 class GateDecisionRequest(BaseModel):
     decision: str  # "continue" | "revise"

@@ -56,9 +56,21 @@ def safe_serialize(obj) -> str:
 # --- LLM Query Helpers ---
 
 async def call_with_retry(func, *args, max_attempts=3, **kwargs):
+    from groq import APIStatusError
     for attempt in range(max_attempts):
         try:
             return await func(*args, **kwargs)
+        except APIStatusError as e:
+            # Only retry on rate limits (429) or server errors (5xx)
+            if e.status_code in [429, 500, 502, 503]:
+                logger.warning(f"Attempt {attempt + 1} failed with retryable error {e.status_code}")
+                if attempt == max_attempts - 1:
+                    raise e
+                await asyncio.sleep(2 ** attempt)
+            else:
+                # Fail fast on 401, 403, 404, etc.
+                logger.error(f"Non-retryable API error {e.status_code}: {e}")
+                raise e
         except Exception as e:
             logger.warning(f"Attempt {attempt + 1} failed with error: {e}")
             if attempt == max_attempts - 1:
@@ -128,7 +140,6 @@ async def startup_advisor_node(state: GraphState) -> Dict[str, Any]:
         latest_v = await asyncio.to_thread(get_latest_artifact_version, state.session_id, "startup_advisor")
         return {
             "gate_decision": None,
-            "gate_resolved": True,
             "status": "running",
             "stages": {"startup_advisor": {"status": "complete", "version": latest_v}}
         }
@@ -214,7 +225,6 @@ async def startup_advisor_node(state: GraphState) -> Dict[str, Any]:
             return {
                 "startup_advisor": result,
                 "gate_decision": None,
-                "gate_resolved": True,
                 "stages": {"startup_advisor": {"status": "complete", "version": version}},
                 "status": "running"
             }
@@ -457,7 +467,11 @@ async def engineering_manager_node(state: GraphState) -> Dict[str, Any]:
             try:
                 from tools.github import create_github_issues_bulk
                 issues_list = [iss.model_dump() if hasattr(iss, 'model_dump') else iss for iss in plan.issues]
-                asyncio.create_task(create_github_issues_bulk(state.github_repo, issues_list))
+                
+                task = asyncio.create_task(create_github_issues_bulk(state.github_repo, issues_list))
+                # FIX: Add error callback so failures aren't swallowed silently
+                task.add_done_callback(lambda t: logger.error(f"GitHub sync failed: {t.exception()}") if t.exception() else logger.info("GitHub sync completed successfully."))
+                
                 await asyncio.to_thread(add_decision_log, state.session_id, "engineering_manager", f"Started background sync to GitHub repository: {state.github_repo}")
             except Exception as github_err:
                 logger.warning(f"Failed to start GitHub sync: {github_err}")
