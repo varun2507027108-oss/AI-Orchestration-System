@@ -9,8 +9,7 @@ import {
   ChevronDown, 
   ChevronUp, 
   MoreHorizontal, 
-  SquarePen,
-  PanelLeftOpen
+  SquarePen
 } from "lucide-react";
 import { BACKEND_URL } from "@/lib/config";
 
@@ -42,11 +41,11 @@ const IntegrationsIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-// Custom close/collapse sidebar icon
-const SidebarCloseIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-muted hover:text-text-main transition-colors">
+// Custom sidebar toggle icon (split rectangle, line on the left)
+const SidebarToggleIcon = ({ className = "text-text-muted hover:text-text-main transition-colors" }: { className?: string }) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <rect x="3" y="3" width="18" height="18" rx="2.5" />
-    <path d="M15 3v18" />
+    <path d="M9 3v18" />
   </svg>
 );
 
@@ -146,7 +145,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
               onClick={() => setIsOpen(false)}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#1C1E22] transition-colors cursor-pointer"
             >
-              <SidebarCloseIcon />
+              <SidebarToggleIcon />
             </button>
           </>
         ) : (
@@ -158,7 +157,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
               <ZLogo />
             </div>
             <div className="absolute opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 text-text-muted hover:text-white">
-              <PanelLeftOpen className="w-5 h-5" />
+              <SidebarToggleIcon className="w-5 h-5 text-text-muted hover:text-white" />
             </div>
           </button>
         )}
@@ -192,26 +191,26 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             </Link>
           </div>
         ) : (
-          <div className="bg-[#16181C] border border-[#23272D] p-1 rounded-xl flex flex-col gap-2 items-center w-full py-2">
+          <div className="bg-[#16181C] border border-[#23272D] p-1 rounded-xl flex flex-col gap-1 items-center w-12 py-1 mx-auto">
             <Link 
               href="/start"
-              className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
                 pathname === "/start" 
                   ? "bg-[#22252A] text-white shadow-sm" 
                   : "text-text-muted hover:text-text-main hover:bg-[#1a1d22]/50"
               }`}
             >
-              <SquarePen className="w-4 h-4" />
+              <SquarePen className="w-[18px] h-[18px]" />
             </Link>
             <Link 
               href={latestSessionId ? `/session/${latestSessionId}` : "/start"}
-              className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
                 pathname.startsWith("/session") 
                   ? "bg-[#22252A] text-white shadow-sm" 
                   : "text-text-muted hover:text-text-main hover:bg-[#1a1d22]/50"
               }`}
             >
-              <AgentFaceIcon className="w-4 h-4" />
+              <AgentFaceIcon className="w-[18px] h-[18px]" />
             </Link>
           </div>
         )}
@@ -239,17 +238,17 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
         )}
       </div>
 
-      {/* Action Item: Notion Setup / Integrations */}
+      {/* Action Item: Notion Setup / Integrations (AI PPT) */}
       <div className="flex-shrink-0 px-1 mb-4">
         {isOpen ? (
           <div className="flex flex-col gap-1">
             <div 
               onClick={() => setIsIntegrationsExpanded(!isIntegrationsExpanded)}
-              className="flex items-center justify-between w-full px-3 py-2 text-xs font-bold text-[#A0A5B0] hover:text-white rounded-lg hover:bg-[#16181C]/50 transition-all duration-200 cursor-pointer select-none"
+              className="flex items-center justify-between w-full px-3 py-2 text-xs font-bold text-[#38BDF8] hover:text-sky-300 rounded-lg hover:bg-[#16181C]/50 transition-all duration-200 cursor-pointer select-none"
             >
               <div className="flex items-center gap-3">
                 <IntegrationsIcon className="w-4 h-4 text-text-muted" />
-                <span>Notion Setup</span>
+                <span>AI PPT</span>
               </div>
               <div className="text-text-muted">
                 {isIntegrationsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -331,14 +330,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
                         : "text-text-muted hover:text-white hover:bg-[#16181C]/30 border border-transparent"
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                        s.status === 'complete' 
-                          ? 'bg-status-complete' 
-                          : s.status === 'failed' 
-                            ? 'bg-status-failed' 
-                            : 'bg-accent animate-pulse'
-                      }`}></div>
+                    <div className="flex items-center min-w-0">
                       <span className="truncate font-medium">{s.startup_name}</span>
                     </div>
                     <MoreHorizontal className="w-3.5 h-3.5 text-text-muted/30 group-hover:text-text-muted opacity-0 group-hover:opacity-100 transition-all duration-200 flex-shrink-0 cursor-pointer hover:bg-panel p-[1px] rounded" />
