@@ -450,29 +450,31 @@ sequenceDiagram
 ```
 AI-Orchestration-System/
 │
-├── 📁 backend/
-│   ├── main.py              # FastAPI app server & REST endpoints
-│   ├── graph.py             # LangGraph DAG: nodes, edges, routing logic
-│   ├── models.py            # Pydantic schemas & GraphState definitions
-│   ├── db.py                # SQLite persistence handlers
-│   ├── config.py            # Environment variable loader
-│   ├── requirements.txt     # Python dependencies
-│   ├── test_api.py          # End-to-end integration tests
-│   └── 📁 tools/
-│       ├── tavily.py        # Tavily Search API wrapper
-│       ├── github.py        # GitHub Issues auto-sync client
-│       ├── notion.py        # Notion database sync (optional)
-│       └── pdf_export.py    # xhtml2pdf report compiler
+├── backend/
+│   ├── main.py                 # FastAPI app server & REST endpoints
+│   ├── graph.py                # LangGraph DAG: nodes, edges, routing logic
+│   ├── models.py               # Pydantic schemas & GraphState definitions
+│   ├── db.py                   # SQLite persistence handlers
+│   ├── config.py               # Environment variable loader
+│   ├── requirements.txt        # Python dependencies
+│   ├── test_api.py             # End-to-end integration tests
+│   │
+│   └── tools/
+│       ├── tavily.py           # Tavily Search API wrapper
+│       ├── github.py           # GitHub Issues auto-sync client
+│       ├── notion.py           # Notion database sync (optional)
+│       └── pdf_export.py       # xhtml2pdf report compiler
 │
-├── 📁 frontend/
-│   ├── 📁 app/
-│   │   ├── page.tsx         # Landing page
-│   │   ├── intake/          # Startup idea submission form
-│   │   └── console/         # Live agent tracking dashboard
-│   ├── 📁 components/       # Reusable UI + Framer Motion animations
-│   ├── 📁 lib/              # Utility functions & API clients
-│   ├── package.json         # Node dependencies & scripts
-│   └── tsconfig.json        # TypeScript config
+├── frontend/
+│   ├── app/
+│   │   ├── page.tsx            # Landing page
+│   │   ├── intake/             # Startup idea submission form
+│   │   └── console/            # Live agent tracking dashboard
+│   │
+│   ├── components/             # Reusable UI + Framer Motion animations
+│   ├── lib/                    # Utility functions & API clients
+│   ├── package.json            # Node dependencies & scripts
+│   └── tsconfig.json           # TypeScript config
 │
 ├── .gitignore
 ├── tsconfig.json
