@@ -84,6 +84,8 @@ class MarketResearchReport(BaseModel):
     gaps: List[str] = []  # New
 
 class PRD(BaseModel):
+    goals: List[str] = []
+    success_metrics: List[str] = []
     problem_statement: str
     user_stories: List[str]
     features: List[Feature]

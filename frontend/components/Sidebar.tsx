@@ -97,35 +97,51 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
 
   return (
     <>
-      {/* Toggle Button */}
-      <button 
+      {/* Floating Toggle Button (Unified for both OPEN and CLOSED states) */}
+      <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 p-1.5 hover:bg-neutral-800/50 rounded-md transition-colors cursor-pointer flex items-center justify-center"
-        aria-label="Toggle Sidebar"
+        className="fixed top-4 left-4 z-50 w-10 h-10 flex items-center justify-center group cursor-pointer bg-[#090C10]/40 hover:bg-[#090C10]/80 rounded-sm border border-border-subtle/50 transition-colors"
       >
-        {isOpen ? (
-          <div className="relative w-6 h-6 flex items-center justify-center group/toggle">
-            {/* Logo */}
-            <div className="transition-all duration-300 group-hover/toggle:scale-90 group-hover/toggle:opacity-0 flex items-center justify-center">
-              <Image 
-                src="/logo.png" 
-                alt="Logo" 
-                width={24} 
-                height={24} 
-                className="w-6 h-6 object-contain"
-              />
-            </div>
-            {/* Close Icon */}
-            <PanelLeftClose 
-              className="absolute w-5 h-5 text-[#8A8F99] hover:text-[#ECEAE3] opacity-0 scale-90 group-hover/toggle:opacity-100 group-hover/toggle:scale-100 transition-all duration-300"
-            />
-          </div>
-        ) : (
-          <PanelLeftOpen className="w-5 h-5 text-[#8A8F99] hover:text-[#ECEAE3] transition-transform duration-200 hover:scale-105" />
-        )}
+        <div className="relative w-8 h-8 flex items-center justify-center">
+          <AnimatePresence mode="wait">
+            {isOpen ? (
+              <motion.div
+                key="open-state"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="relative w-8 h-8 flex items-center justify-center"
+              >
+                {/* Logo that scales down on hover */}
+                <img 
+                  src="/logo.png" 
+                  alt="Logo" 
+                  className="w-8 h-8 object-contain absolute transition-all duration-200 group-hover:scale-90 group-hover:opacity-20"
+                />
+                {/* Close icon that fades in on hover */}
+                <PanelLeftClose 
+                  className="w-5 h-5 text-accent absolute opacity-0 transition-opacity duration-200 group-hover:opacity-100" 
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="closed-state"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="relative w-8 h-8 flex items-center justify-center"
+              >
+                {/* Just the PanelLeftOpen icon */}
+                <PanelLeftOpen 
+                  className="w-5 h-5 text-accent" 
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </button>
 
-
+      {/* The Sidebar Panel (Visible only when OPEN) */}
       <AnimatePresence>
         {isOpen && (
           <motion.div 
@@ -133,20 +149,20 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: -300 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed top-0 left-0 bottom-0 w-72 bg-[#090C10] border-r border-border-subtle z-40 flex flex-col p-4 pt-16 overflow-y-auto hide-scrollbar text-white"
+            className="fixed top-0 left-0 bottom-0 w-72 bg-[#090C10] border-r border-border-subtle z-40 flex flex-col p-4 overflow-y-auto hide-scrollbar dark text-text-main"
           >
-            <Link 
-              href="/start" 
-              className="block w-full bg-accent text-[#090C10] text-center py-2 text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity mb-8 rounded-sm"
-            >
+            {/* Spacer to prevent content overlapping with the fixed toggle button */}
+            <div className="h-16 flex-shrink-0" />
+
+            <Link href="/start" className="block w-full bg-accent text-base text-center py-2 text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity mb-8 rounded-sm">
               New Session
             </Link>
 
             <div className="mb-8">
-              <h3 className="text-[10px] uppercase tracking-widest text-[#8A8F99] font-bold mb-3">Integrations</h3>
-              <div className="space-y-2 bg-[#11161C] border border-border-subtle p-3 rounded-sm">
+              <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-3">Integrations</h3>
+              <div className="space-y-2 bg-panel border border-border-subtle p-3 rounded-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] text-[#ECEAE3] font-bold">Notion</span>
+                  <span className="text-[11px] text-text-main font-bold">Notion</span>
                   {isConnected && (
                     <span className="flex h-2 w-2 relative">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-complete opacity-75"></span>
@@ -159,18 +175,18 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
                   placeholder="Integration Token" 
                   value={notionToken}
                   onChange={(e) => setNotionToken(e.target.value)}
-                  className="w-full bg-[#05070A] border border-border-subtle px-2 py-1 text-[#ECEAE3] text-[10px] focus:outline-none focus:border-accent rounded-sm"
+                  className="w-full bg-base border border-border-subtle px-2 py-1 text-text-main text-[10px] focus:outline-none focus:border-accent rounded-sm"
                 />
                 <input 
                   type="text" 
                   placeholder="Database ID" 
                   value={notionDbId}
                   onChange={(e) => setNotionDbId(e.target.value)}
-                  className="w-full bg-[#05070A] border border-border-subtle px-2 py-1 text-[#ECEAE3] text-[10px] focus:outline-none focus:border-accent rounded-sm"
+                  className="w-full bg-base border border-border-subtle px-2 py-1 text-text-main text-[10px] focus:outline-none focus:border-accent rounded-sm"
                 />
                 <button 
                   onClick={handleSaveNotion}
-                  className="w-full bg-accent text-[#090C10] py-1 text-[9px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity rounded-sm mt-1 cursor-pointer"
+                  className="w-full bg-accent text-base py-1 text-[9px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity rounded-sm mt-1 cursor-pointer"
                 >
                   {isConnected ? "Update" : "Save"}
                 </button>
@@ -178,29 +194,21 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             </div>
 
             <div className="flex-1">
-              <h3 className="text-[10px] uppercase tracking-widest text-[#8A8F99] font-bold mb-3">Recent Sessions</h3>
+              <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-3">Recent Sessions</h3>
               <div className="space-y-2">
                 {recentSessions.length === 0 ? (
-                  <p className="text-[#8A8F99] text-[10px] italic">No history yet.</p>
+                  <p className="text-text-muted text-[10px] italic">No history yet.</p>
                 ) : (
                   recentSessions.map((s: any) => (
                     <Link 
                       href={`/session/${s.session_id}`} 
                       key={s.session_id} 
-                      className={`block bg-[#11161C] border border-border-subtle p-2 hover:border-accent transition-colors rounded-sm ${pathname === `/session/${s.session_id}` ? "border-accent" : ""}`}
+                      className={`block bg-panel border border-border-subtle p-2 hover:border-accent transition-colors rounded-sm ${pathname === `/session/${s.session_id}` ? "border-accent" : ""}`}
                     >
-                      <div className="text-[#ECEAE3] text-[11px] font-bold truncate">{s.startup_name}</div>
+                      <div className="text-text-main text-[11px] font-bold truncate">{s.startup_name}</div>
                       <div className="flex items-center gap-2 mt-1">
-                        <div 
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            s.status === 'complete' 
-                              ? 'bg-status-complete' 
-                              : s.status === 'failed' 
-                                ? 'bg-status-failed' 
-                                : 'bg-accent animate-pulse'
-                          }`}
-                        ></div>
-                        <span className="text-[#8A8F99] text-[9px] uppercase tracking-widest">{s.status}</span>
+                        <div className={`w-1.5 h-1.5 rounded-full ${s.status === 'complete' ? 'bg-status-complete' : s.status === 'failed' ? 'bg-status-failed' : 'bg-accent animate-pulse'}`}></div>
+                        <span className="text-text-muted text-[9px] uppercase tracking-widest">{s.status}</span>
                       </div>
                     </Link>
                   ))

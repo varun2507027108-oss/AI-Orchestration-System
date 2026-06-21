@@ -177,12 +177,20 @@ async def startup_advisor_node(state: GraphState) -> Dict[str, Any]:
         if not is_resume:
             api_key = settings.GROQ_API_KEY
             if not api_key:
-                result = ValidationResult(
-                    verdict="Excellent idea",
-                    risk_score=0.2,
-                    reasoning="Straightforward business model and target (Mocked).",
-                    red_flags=[]
-                )
+                if "trigger_gate" in idea_to_validate:
+                    result = ValidationResult(
+                        verdict="Needs Major Revision",
+                        risk_score=0.9,
+                        reasoning="A volatile dangerous project (Mocked trigger_gate).",
+                        red_flags=["Potential hazard", "High volatility"]
+                    )
+                else:
+                    result = ValidationResult(
+                        verdict="Excellent idea",
+                        risk_score=0.2,
+                        reasoning="Straightforward business model and target (Mocked).",
+                        red_flags=[]
+                    )
             else:
                 result_dict = await query_groq(system_instruction, prompt, ValidationResult, api_key=api_key, model="llama-3.3-70b-versatile")
                 result = ValidationResult(**result_dict)
@@ -313,7 +321,8 @@ async def market_research_node(state: GraphState) -> Dict[str, Any]:
                 }
             if not isinstance(report_dict.get("gaps"), list):
                 report_dict["gaps"] = []
-            report = MarketResearchReport(**report_dict)
+                
+        report = MarketResearchReport(**report_dict)
             
         version = await asyncio.to_thread(save_artifact, state.session_id, "market_research", report_dict)
         await asyncio.to_thread(add_decision_log, state.session_id, "market_research", "Successfully completed market research report using web search.")
@@ -332,14 +341,15 @@ async def product_manager_node(state: GraphState) -> Dict[str, Any]:
     idea_val = state.idea
     market_report = state.market_research
     market_report_str = safe_serialize(market_report) if market_report else "No market report available."
-    
     system_instruction = (
         "You are a Principal Product Manager. Write a lean, high-impact PRD. "
+        "CRITICAL: You MUST provide EXACTLY 3 goals in the 'goals' array, and EXACTLY 3 success metrics in the 'success_metrics' array. No more, no less. This is a strict constraint. "
         "Define a sharp problem_statement (2 sentences). "
         "Write 3-4 core user_stories in the format: 'As a [user], I want to [action] so that [value]'. "
         "List 4-5 features using the MoSCoW prioritization method (Must-have, Should-have) for priority. "
         "Define a 2-phase roadmap_phases (MVP vs V2). "
         "You must output a valid JSON object with these exact keys: "
+        '"goals" (array of exactly 3 strings), "success_metrics" (array of exactly 3 strings), '
         '"problem_statement" (string), "user_stories" (array of strings), '
         '"features" (array of objects with name, description, priority), '
         '"roadmap_phases" (array of objects with name, items).'
@@ -350,6 +360,8 @@ async def product_manager_node(state: GraphState) -> Dict[str, Any]:
         api_key = settings.GROQ_API_KEY
         if not api_key:
             prd = PRD(
+                goals=["Validate product concept", "Identify core features", "Launch MVP within 90 days"],
+                success_metrics=["MVP launched on schedule", "3-5 user feedback sessions completed", "100+ beta registrations"],
                 problem_statement=f"Simplify setup for idea: {idea_val} (Mocked)",
                 user_stories=["As a founder, I want to review automated market validation report."],
                 features=[{"name": "Skeletal Pipeline", "description": "Validates graph state", "priority": "High"}],
@@ -424,6 +436,7 @@ async def engineering_manager_node(state: GraphState) -> Dict[str, Any]:
     try:
         # CRITICAL FIX: Safely handle LangGraph state deserialization
         spec = state.architect
+        spec_data = {}
         if spec is None:
             spec_str = "No architecture spec available."
         elif hasattr(spec, 'model_dump'):
@@ -561,7 +574,8 @@ async def marketing_node(state: GraphState) -> Dict[str, Any]:
             if not isinstance(assets_dict.get("email_sequence"), list): assets_dict["email_sequence"] = []
             if not isinstance(assets_dict.get("ninety_day_plan"), list): assets_dict["ninety_day_plan"] = []
             if not isinstance(assets_dict.get("launch_channels"), list): assets_dict["launch_channels"] = []
-            assets = MarketingAssets(**assets_dict)
+            
+        assets = MarketingAssets(**assets_dict)
             
         version = await asyncio.to_thread(save_artifact, state.session_id, "marketing", assets_dict)
         await asyncio.to_thread(add_decision_log, state.session_id, "marketing", "Generated promotional copy and launch assets.")

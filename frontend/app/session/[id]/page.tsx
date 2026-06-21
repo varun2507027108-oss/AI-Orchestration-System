@@ -284,12 +284,13 @@ function GateCard({ id, gate }: { id: string, gate: any }) {
 }
 
 function DataBlock({ label, value, isLongText, list }: { label: string, value?: string, isLongText?: boolean, list?: string[] }) {
+  const isListValid = list && Array.isArray(list) && list.length > 0;
   return (
     <div className="flex flex-col gap-2">
       <span className="text-[11px] uppercase tracking-widest text-text-muted font-bold">{label}</span>
       <div className={`border border-border-subtle bg-panel p-4 text-text-main text-sm leading-relaxed ${isLongText ? 'whitespace-pre-wrap' : ''}`}>
         {value && <>{value}</>}
-        {list && (
+        {isListValid && (
           <ul className="space-y-2">
             {list.map((item, i) => (
               <li key={i} className="flex gap-3">
@@ -299,7 +300,7 @@ function DataBlock({ label, value, isLongText, list }: { label: string, value?: 
             ))}
           </ul>
         )}
-        {!value && !list && <span className="text-status-pending italic">No data</span>}
+        {!value && !isListValid && <span className="text-status-pending italic">No data</span>}
       </div>
     </div>
   )
@@ -347,8 +348,16 @@ function ArtifactDisplay({ stage, data }: { stage: string; data: any }) {
         return (
           <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <DataBlock label="Goals" list={data.goals} />
-              <DataBlock label="Success Metrics" list={data.success_metrics} />
+              {data.goals && Array.isArray(data.goals) && data.goals.length > 0 ? (
+                <DataBlock label="Goals" list={data.goals} />
+              ) : (
+                <DataBlock label="Goals" value={typeof data.goals === 'string' ? data.goals : "No data"} />
+              )}
+              {data.success_metrics && Array.isArray(data.success_metrics) && data.success_metrics.length > 0 ? (
+                <DataBlock label="Success Metrics" list={data.success_metrics} />
+              ) : (
+                <DataBlock label="Success Metrics" value={typeof data.success_metrics === 'string' ? data.success_metrics : "No data"} />
+              )}
             </div>
             <DataBlock label="Problem Statement" value={data.problem_statement} isLongText />
 
@@ -997,7 +1006,7 @@ export default function SessionDashboard({ params }: { params: Promise<{ id: str
             <TabsViewer sessionId={id} activeStatuses={activeStatuses} artifacts={data.artifacts || {}} />
 
             <AnimatePresence>
-              {(data.status === 'complete') && (
+              {(data.status === 'complete' || data.status === 'failed') && (
                 <ExportActions sessionId={id} />
               )}
             </AnimatePresence>
