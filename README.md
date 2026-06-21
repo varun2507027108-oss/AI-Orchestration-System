@@ -23,17 +23,12 @@
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-10B981?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-34D399?style=for-the-badge&logo=python&logoColor=white)](https://langchain-ai.github.io/langgraph/)
 [![Groq](https://img.shields.io/badge/LLM-Groq-F59E0B?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz48L3N2Zz4=&logoColor=black)](https://groq.com/)
-[![Gemini](https://img.shields.io/badge/LLM-Gemini%202.5-8B5CF6?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
-[![NVIDIA NIM](https://img.shields.io/badge/LLM-NVIDIA%20NIM-76B900?style=for-the-badge&logo=nvidia&logoColor=white)](https://build.nvidia.com/)
 [![SQLite](https://img.shields.io/badge/Database-SQLite-047857?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Python](https://img.shields.io/badge/Language-Python%203.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
 
 <br/>
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
-[![Made with ❤️ by](https://img.shields.io/badge/Made%20with%20%E2%9D%A4%EF%B8%8F%20by-PARALLAX-F59E0B?style=flat-square)](https://github.com/varun2507027108-oss)
+[![Made by](https://img.shields.io/badge/Made%20with%20%E2%9D%A4%EF%B8%8F%20by-PARALLAX-F59E0B?style=flat-square)](https://github.com/varun2507027108-oss)
 
 </div>
 
@@ -692,8 +687,6 @@ git push origin feature/your-feature-name
 
 **Varun** · Team PARALLAX
 
-*First-year B.E. — Artificial Intelligence & Data Science*
-*Vidyavardhini's College of Engineering & Technology, Vasai, Mumbai*
 
 [![GitHub](https://img.shields.io/badge/GitHub-varun2507027108--oss-181717?style=for-the-badge&logo=github)](https://github.com/varun2507027108-oss)
 
@@ -701,11 +694,6 @@ git push origin feature/your-feature-name
 
 ---
 
-## 📄 License
-
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
-
----
 
 <div align="center">
 
