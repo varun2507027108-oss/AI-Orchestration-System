@@ -36,12 +36,13 @@ class ApiEndpoint(BaseModel):
     method: Optional[str] = "GET"
     path: Optional[str] = "/"
     description: Optional[str] = ""
+    auth_required: Optional[bool] = True  # Added to match new Architect prompt
 
 class GitHubIssue(BaseModel):
     title: str
     body: Optional[str] = ""
     labels: List[str] = []
-    story_points: Optional[int] = 3  # New
+    story_points: Optional[int] = 3
 
 class Sprint(BaseModel):
     name: str
@@ -67,6 +68,13 @@ class EmailStep(BaseModel):
     subject: str
     body: str
 
+# New: Launch Channel (Using Dict[str, Any] to safely handle extra keys like success_metric)
+# class LaunchChannel(BaseModel):
+#     channel: str
+#     tactic: str
+#     expected_reach: str
+#     success_metric: Optional[str] = ""
+
 # --- Agent Output Models ---
 
 class ValidationResult(BaseModel):
@@ -80,8 +88,8 @@ class MarketResearchReport(BaseModel):
     competitors: List[Competitor]
     trends: List[str]
     sources: List[str]
-    swot: Optional[SWOTAnalysis] = None  # New
-    gaps: List[str] = []  # New
+    swot: Optional[SWOTAnalysis] = None
+    gaps: List[str] = []
 
 class PRD(BaseModel):
     goals: List[str] = []
@@ -100,9 +108,9 @@ class ArchitectureSpec(BaseModel):
 class IssuesAndSprintPlan(BaseModel):
     issues: List[GitHubIssue] = []
     sprints: List[Sprint] = []
-    definition_of_done: List[str] = []  # New
-    tech_debt_risks: List[str] = []  # New
-    team_size_recommended: Optional[Union[str, int]] = "2-3 engineers"  # New
+    definition_of_done: List[str] = []
+    tech_debt_risks: List[str] = []
+    team_size_recommended: Optional[Union[str, int]] = "2-3 engineers"
 
 class MarketingAssets(BaseModel):
     landing_copy: str
@@ -110,8 +118,8 @@ class MarketingAssets(BaseModel):
     email_campaign: str
     pricing_tiers: List[PricingTier] = []
     email_sequence: List[EmailStep] = []
-    ninety_day_plan: List[str] = []  # New
-    launch_channels: List[Dict[str, str]] = []  # New (e.g., [{"channel": "Product Hunt", "tactic": "...", "reach": "..."}])
+    ninety_day_plan: List[str] = []
+    launch_channels: List[Dict[str, Any]] = []  # Updated to Dict[str, Any] to safely handle success_metric
 
 # --- Graph State ---
 

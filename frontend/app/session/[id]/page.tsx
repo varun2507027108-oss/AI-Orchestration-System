@@ -847,8 +847,6 @@ export default function SessionDashboard({ params }: { params: Promise<{ id: str
   const [error, setError] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-
   useEffect(() => {
     if (!id) return;
     try {
@@ -931,9 +929,9 @@ export default function SessionDashboard({ params }: { params: Promise<{ id: str
   const blurClasses = isBlurred ? "blur-sm opacity-40 pointer-events-none transition-all duration-300" : "transition-all duration-300";
 
   return (
-    <div className="flex min-h-screen font-mono bg-base text-text-main">
-      <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
-      <div className={`flex-1 min-w-0 transition-all duration-300 ${sidebarOpen ? 'ml-72' : 'ml-16'}`}>
+    <div className="flex min-h-screen font-mono bg-base text-text-main relative">
+      <Sidebar />
+      <div className="flex-1 min-w-0 md:pl-14">
         <div className="max-w-[1500px] mx-auto p-6 md:p-10 space-y-8">
       {/* Global Progress Bar */}
       <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-border-subtle overflow-hidden">
