@@ -83,12 +83,12 @@ export default function Sidebar() {
         <img 
           src="/logo-light.png" 
           alt="Logo" 
-          className="w-9 h-9 object-contain transition-opacity duration-200 block dark:hidden" 
+          className="w-11 h-11 object-contain transition-opacity duration-200 block dark:hidden" 
         />
         <img 
           src="/logo-dark.png" 
           alt="Logo" 
-          className="w-9 h-9 object-contain transition-opacity duration-200 hidden dark:block" 
+          className="w-11 h-11 object-contain transition-opacity duration-200 hidden dark:block" 
         />
       </div>
 
