@@ -1,4 +1,4 @@
-# 🧬 Blueprint.ai — AI Founder Orchestration System
+# Team Parallax - 🧬 Blueprint.ai — AI Founder Orchestration System
 *From raw prompt to investor-ready founder package in 90 seconds.*
 
 Blueprint.ai is a stateful, multi-agent AI pipeline built to orchestrate the journey from a raw startup idea to a fully structured, ready-to-build project. By leveraging a parallel-branching path architecture and a human-in-the-loop (HITL) gate interrupt, it transforms a simple text prompt into a cohesive founder suite: VC validation reports, competitor intelligence, a Product Requirements Document (PRD), PostgreSQL schemas, development backlog sprints, promotional copy, and exportable PDF/Notion deliverables.
