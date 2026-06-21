@@ -27,6 +27,7 @@
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Python](https://img.shields.io/badge/Language-Python%203.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
 
+</div>
 
 ## 📖 What is Blueprint?
 
@@ -77,7 +78,7 @@ graph TD
 
     Advisor --> Gate{"🔒 Risk Assessment Gate\nrisk_score threshold"}
 
-    Gate -- "🔴 risk ≥ 0.6 OR red_flags" --> Interrupted(["⏸️ INTERRUPT\nAwaiting Founder Decision"]):::interrupt
+    Gate -- "🔴 risk >= 0.6 OR red_flags" --> Interrupted(["⏸️ INTERRUPT\nAwaiting Founder Decision"]):::interrupt
     Interrupted -- "✏️ Revise Idea" --> Advisor
     Interrupted -- "✅ Continue Anyway" --> Researcher
 
@@ -121,12 +122,12 @@ flowchart LR
 
     subgraph ADVISOR["💡 Startup Advisor"]
         A1["Reads: StartupInput"]
-        A2["Produces: ValidationResult\n──────────────────\nverdict: str\nrisk_score: float 0.0–1.0\nreasoning: str\nred_flags: list[str]"]
+        A2["Produces: ValidationResult\n──────────────────\nverdict: str\nrisk_score: float 0.0-1.0\nreasoning: str\nred_flags: list[str]"]
     end
 
     subgraph GATE["🔒 Risk Gate"]
-        G1{"risk_score ≥ 0.6\nOR red_flags?"}
-        G2["GraphState.gate_decision\n= 'continue' | 'revise'"]
+        G1{"risk_score >= 0.6\nOR red_flags?"}
+        G2["GraphState.gate_decision\n= continue or revise"]
     end
 
     subgraph RESEARCHER["🔍 Market Researcher"]
@@ -139,14 +140,13 @@ flowchart LR
         P2["Produces: PRD\n────────────────\nproblem_statement: str\nuser_stories: list[str]\nfeatures: list[Feature]\nroadmap_phases: list[Phase]"]
     end
 
-    subgraph PARALLEL["⚡ Parallel Execution"]
-        subgraph ENG["Engineering Stream"]
-            AR["📐 Architect → ArchitectureSpec\n─────────────────────────\ndb_schema_sql: str DDL\ndb_schema_mermaid: str\napi_endpoints: list[Endpoint]\nsystem_design_notes: str"]
-            EM["⚙️ Eng Manager → IssuesAndSprintPlan\n────────────────────────────────\nissues: list[Issue]\nsprints: list[Sprint]"]
-        end
-        subgraph MKT["Growth Stream"]
-            MK["📣 Marketing → MarketingAssets\n──────────────────────────────\nlanding_copy: str\nlinkedin_post: str\nemail_campaign: str"]
-        end
+    subgraph ENG["Engineering Stream"]
+        AR["📐 Architect → ArchitectureSpec\n─────────────────────────\ndb_schema_sql: str DDL\ndb_schema_mermaid: str\napi_endpoints: list[Endpoint]\nsystem_design_notes: str"]
+        EM["⚙️ Eng Manager → IssuesAndSprintPlan\n────────────────────────────────\nissues: list[Issue]\nsprints: list[Sprint]"]
+    end
+
+    subgraph MKT["Growth Stream"]
+        MK["📣 Marketing → MarketingAssets\n──────────────────────────────\nlanding_copy: str\nlinkedin_post: str\nemail_campaign: str"]
     end
 
     subgraph OUTPUT["📤 OUTPUT"]
@@ -158,22 +158,20 @@ flowchart LR
 
     INPUT --> ADVISOR
     ADVISOR --> GATE
-    GATE -->|"INTERRUPT"| GATE
     GATE -->|"Pass"| RESEARCHER
     RESEARCHER --> PM
-    PM --> PARALLEL
+    PM --> ENG
+    PM --> MKT
     AR --> EM
-    PARALLEL --> OUTPUT
+    ENG --> OUTPUT
+    MKT --> OUTPUT
 
     style INPUT fill:#1e3a2f,stroke:#059669,color:#d1fae5
     style ADVISOR fill:#1e2d40,stroke:#3B82F6,color:#bfdbfe
     style GATE fill:#3b1f1f,stroke:#DC2626,color:#fecaca
     style RESEARCHER fill:#1e2d40,stroke:#3B82F6,color:#bfdbfe
     style PM fill:#2d1f3b,stroke:#8B5CF6,color:#ede9fe
-    style PARALLEL fill:#1a2e1a,stroke:#10B981,color:#d1fae5
     style OUTPUT fill:#2d2d1a,stroke:#F59E0B,color:#fef3c7
-    style ENG fill:#1e2a1e,stroke:#34D399,color:#d1fae5
-    style MKT fill:#1e2a1e,stroke:#34D399,color:#d1fae5
 ```
 
 ---
@@ -192,7 +190,7 @@ flowchart LR
 | **LLM** | Groq · `llama-3.3-70b-versatile` |
 | **API Key** | `ADVISOR_API_KEY` → fallback `GROQ_API_KEY` |
 | **Model Override** | `ADVISOR_MODEL` → fallback `GROQ_MODEL` |
-| **Gate Trigger** | `risk_score ≥ 0.6` OR `len(red_flags) > 0` |
+| **Gate Trigger** | `risk_score >= 0.6` OR `len(red_flags) > 0` |
 
 **What it evaluates:**
 - Value proposition complexity & differentiation
@@ -392,14 +390,14 @@ sequenceDiagram
     LG->>Advisor: Evaluate idea feasibility
     Advisor-->>Gate: ValidationResult {risk_score, red_flags}
 
-    alt risk_score ≥ 0.6 OR red_flags present
-        Gate-->>API: INTERRUPT — status: awaiting_gate
+    alt risk_score >= 0.6 OR red_flags present
+        Gate-->>API: INTERRUPT - status: awaiting_gate
         API-->>Founder: Decision Modal (Revise / Continue)
         Founder->>API: POST /gate {session_id, decision, revised_idea?}
         API->>LG: Resume with gate_decision
     end
 
-    Gate->>Researcher: Approved — begin market research
+    Gate->>Researcher: Approved - begin market research
     Researcher->>Researcher: Tavily API search queries
     Researcher-->>PM: MarketResearchReport
 
@@ -681,13 +679,11 @@ git push origin feature/your-feature-name
 
 **Varun** · Team PARALLAX
 
-
 [![GitHub](https://img.shields.io/badge/GitHub-varun2507027108--oss-181717?style=for-the-badge&logo=github)](https://github.com/varun2507027108-oss)
 
 </div>
 
 ---
-
 
 <div align="center">
 
