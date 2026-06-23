@@ -6,9 +6,10 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
-async def create_github_issue(repo: str, title: str, body: str, labels: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
-    if not settings.GITHUB_TOKEN:
-        logger.warning("GITHUB_TOKEN is not configured. Skipping issue creation.")
+async def create_github_issue(repo: str, title: str, body: str, labels: Optional[List[str]] = None, token: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    actual_token = token or settings.GITHUB_TOKEN
+    if not actual_token:
+        logger.warning("No GitHub token provided. Skipping issue creation.")
         return None
         
     if not repo or "/" not in repo:
@@ -17,7 +18,7 @@ async def create_github_issue(repo: str, title: str, body: str, labels: Optional
 
     url = f"https://api.github.com/repos/{repo}/issues"
     headers = {
-        "Authorization": f"Bearer {settings.GITHUB_TOKEN}", # Bearer is required for fine-grained PATs
+        "Authorization": f"Bearer {actual_token}", # Bearer is required for fine-grained PATs or OAuth tokens
         "Accept": "application/vnd.github.v3+json",
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "AI-Founder-OS"
@@ -42,7 +43,7 @@ async def create_github_issue(repo: str, title: str, body: str, labels: Optional
         logger.exception(f"Exception occurred while creating GitHub issue: {e}")
         return None
 
-async def create_github_issues_bulk(repo: str, issues: List[Any]) -> List[Dict[str, Any]]:
+async def create_github_issues_bulk(repo: str, issues: List[Any], token: Optional[str] = None) -> List[Dict[str, Any]]:
     created = []
     for issue in issues:
         if hasattr(issue, 'model_dump'):
@@ -52,7 +53,8 @@ async def create_github_issues_bulk(repo: str, issues: List[Any]) -> List[Dict[s
             repo=repo,
             title=issue.get("title", "Untitled Issue"),
             body=issue.get("body", ""),
-            labels=issue.get("labels", [])
+            labels=issue.get("labels", []),
+            token=token
         )
         if res:
             created.append(res)

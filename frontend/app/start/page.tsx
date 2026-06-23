@@ -61,6 +61,7 @@ export default function StartPage() {
       startup_name: formData.get("startup_name") as string,
       idea: `Purpose: ${purpose}\n\nWhat we're building: ${building}`,
       github_repo: cleanRepo,
+      github_token: localStorage.getItem("github_token") || null,
     };
 
 

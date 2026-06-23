@@ -143,3 +143,4 @@ class GraphState(BaseModel):
 
     gate_decision: Optional[str] = None
     revised_idea: Optional[str] = None
+    github_token: Optional[str] = None

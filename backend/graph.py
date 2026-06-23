@@ -1099,7 +1099,11 @@ async def engineering_manager_node(state: GraphState) -> Dict[str, Any]:
                     for iss in plan.issues
                 ]
                 task = asyncio.create_task(
-                    create_github_issues_bulk(state.github_repo, issues_list)
+                    create_github_issues_bulk(
+                        state.github_repo, 
+                        issues_list, 
+                        token=state.github_token
+                    )
                 )
                 task.add_done_callback(
                     lambda t: (

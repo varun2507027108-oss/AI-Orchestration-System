@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     
     # Tool Configs
     GITHUB_TOKEN: str = Field(default="")
+    GITHUB_CLIENT_ID: str = Field(default="")
+    GITHUB_CLIENT_SECRET: str = Field(default="")
     NOTION_TOKEN: str = Field(default="")
     NOTION_DATABASE_ID: str = Field(default="")
     

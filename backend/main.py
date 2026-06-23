@@ -3,6 +3,7 @@ import os
 import uuid
 import logging
 import asyncio
+import httpx
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 
@@ -28,6 +29,7 @@ class CreateSessionRequest(BaseModel):
     startup_name: str
     idea: str
     github_repo: Optional[str] = ""
+    github_token: Optional[str] = None
 
 class GateDecisionRequest(BaseModel):
     decision: str  # "continue" | "revise"
@@ -91,6 +93,30 @@ async def resume_graph_in_background(graph: Any, command: Command, config: Dict[
     except Exception as e:
         logger.exception(f"Error resuming graph in background for thread {config['configurable']['thread_id']}: {e}")
 
+@app.get("/auth/github")
+async def github_auth(code: str):
+    token_url = "https://github.com/login/oauth/access_token"
+    payload = {
+        "client_id": settings.GITHUB_CLIENT_ID,
+        "client_secret": settings.GITHUB_CLIENT_SECRET,
+        "code": code,
+    }
+    headers = {"Accept": "application/json"}
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(token_url, json=payload, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                access_token = data.get("access_token")
+                if access_token:
+                    return {"access_token": access_token}
+                logger.error(f"GitHub OAuth error: {data}")
+                raise HTTPException(status_code=400, detail=data.get("error_description", "Failed to retrieve access token"))
+            raise HTTPException(status_code=400, detail="Failed to connect with GitHub OAuth")
+        except httpx.HTTPError as e:
+            logger.error(f"GitHub OAuth HTTP error: {e}")
+            raise HTTPException(status_code=400, detail="HTTP error during OAuth exchange")
+
 @app.post("/sessions")
 async def create_session(payload: CreateSessionRequest):
     session_id = str(uuid.uuid4())
@@ -100,7 +126,8 @@ async def create_session(payload: CreateSessionRequest):
     ACTIVE_SESSIONS[session_id] = {
         "startup_name": payload.startup_name,
         "idea": payload.idea,
-        "github_repo": payload.github_repo
+        "github_repo": payload.github_repo,
+        "github_token": payload.github_token
     }
 
     initial_state = {
@@ -108,6 +135,7 @@ async def create_session(payload: CreateSessionRequest):
         "startup_name": payload.startup_name,
         "idea": payload.idea,
         "github_repo": payload.github_repo,
+        "github_token": payload.github_token,
         "status": "running",
         "stages": {
             "startup_advisor": {"status": "pending", "version": 0},
@@ -139,6 +167,7 @@ async def get_session(id: str):
             "startup_name": details["startup_name"],
             "idea": details["idea"],
             "github_repo": details["github_repo"],
+            "github_token": details.get("github_token"),
             "status": "running",
             "stages": {
                 "startup_advisor": {"status": "pending", "version": 0},

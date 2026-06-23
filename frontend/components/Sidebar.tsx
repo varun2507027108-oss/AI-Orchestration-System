@@ -4,13 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { BACKEND_URL } from "@/lib/config";
+import { BACKEND_URL, GITHUB_CLIENT_ID } from "@/lib/config";
 
 export default function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [notionToken, setNotionToken] = useState("");
   const [notionDbId, setNotionDbId] = useState("");
   const [isConnected, setIsConnected] = useState(false);
+  const [githubConnected, setGithubConnected] = useState(false);
   const [recentSessions, setRecentSessions] = useState<any[]>([]);
   const pathname = usePathname();
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -23,6 +24,14 @@ export default function Sidebar() {
       setNotionToken(token);
       setNotionDbId(dbId);
       setIsConnected(true);
+    }
+
+    // Load GitHub token
+    const ghToken = localStorage.getItem("github_token");
+    if (ghToken) {
+      setGithubConnected(true);
+    } else {
+      setGithubConnected(false);
     }
 
     // Load Recent Sessions
@@ -62,6 +71,16 @@ export default function Sidebar() {
     localStorage.setItem("notion_token", notionToken);
     localStorage.setItem("notion_database_id", notionDbId);
     setIsConnected(true);
+  };
+
+  const handleConnectGithub = () => {
+    const redirectUri = window.location.origin + "/auth/github/callback";
+    window.location.href = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${redirectUri}&scope=repo`;
+  };
+
+  const handleDisconnectGithub = () => {
+    localStorage.removeItem("github_token");
+    setGithubConnected(false);
   };
 
   useEffect(() => {
@@ -104,31 +123,55 @@ export default function Sidebar() {
 
         <div className="mb-8">
           <h3 className="text-[10px] uppercase tracking-widest text-text-muted font-bold mb-3">Integrations</h3>
-          <div className="space-y-2 bg-panel border border-border-subtle p-3 rounded-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] text-text-main font-bold">Notion</span>
-              {isConnected && <span className="w-2 h-2 bg-status-complete rounded-full animate-pulse"></span>}
+          <div className="space-y-3">
+            <div className="space-y-2 bg-panel border border-border-subtle p-3 rounded-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] text-text-main font-bold">Notion</span>
+                {isConnected && <span className="w-2 h-2 bg-status-complete rounded-full animate-pulse"></span>}
+              </div>
+              <input 
+                type="password" 
+                placeholder="Integration Token" 
+                value={notionToken}
+                onChange={(e) => setNotionToken(e.target.value)}
+                className="w-full bg-base border border-border-subtle px-2 py-1 text-text-main text-[10px] focus:outline-none focus:border-accent rounded-sm"
+              />
+              <input 
+                type="text" 
+                placeholder="Database ID" 
+                value={notionDbId}
+                onChange={(e) => setNotionDbId(e.target.value)}
+                className="w-full bg-base border border-border-subtle px-2 py-1 text-text-main text-[10px] focus:outline-none focus:border-accent rounded-sm"
+              />
+              <button 
+                onClick={handleSaveNotion}
+                className="w-full bg-accent text-base py-1 text-[9px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity rounded-sm mt-1"
+              >
+                {isConnected ? "Update" : "Save"}
+              </button>
             </div>
-            <input 
-              type="password" 
-              placeholder="Integration Token" 
-              value={notionToken}
-              onChange={(e) => setNotionToken(e.target.value)}
-              className="w-full bg-base border border-border-subtle px-2 py-1 text-text-main text-[10px] focus:outline-none focus:border-accent rounded-sm"
-            />
-            <input 
-              type="text" 
-              placeholder="Database ID" 
-              value={notionDbId}
-              onChange={(e) => setNotionDbId(e.target.value)}
-              className="w-full bg-base border border-border-subtle px-2 py-1 text-text-main text-[10px] focus:outline-none focus:border-accent rounded-sm"
-            />
-            <button 
-              onClick={handleSaveNotion}
-              className="w-full bg-accent text-base py-1 text-[9px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity rounded-sm mt-1"
-            >
-              {isConnected ? "Update" : "Save"}
-            </button>
+
+            <div className="space-y-2 bg-panel border border-border-subtle p-3 rounded-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] text-text-main font-bold">GitHub</span>
+                {githubConnected && <span className="w-2 h-2 bg-status-complete rounded-full animate-pulse"></span>}
+              </div>
+              {githubConnected ? (
+                <button 
+                  onClick={handleDisconnectGithub}
+                  className="w-full bg-base border border-border-subtle text-text-muted py-1 text-[9px] font-bold uppercase tracking-widest hover:bg-border-subtle transition-opacity rounded-sm"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button 
+                  onClick={handleConnectGithub}
+                  className="w-full bg-accent text-base py-1 text-[9px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity rounded-sm"
+                >
+                  Connect GitHub
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
