@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { BACKEND_URL, GITHUB_CLIENT_ID } from "@/lib/config";
+import { Plus, Github, FileText } from "lucide-react";
 
 export default function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -100,21 +101,69 @@ export default function Sidebar() {
       {/* Brand logo at the top */}
       <div className="flex items-center justify-center w-14 h-16 shrink-0 relative">
         <img 
-          src="/logo-light.png" 
+          src="/logo-dark.png" 
           alt="Logo" 
           className="w-11 h-11 object-contain transition-opacity duration-200 block dark:hidden" 
         />
         <img 
-          src="/logo-dark.png" 
+          src="/logo-light.png" 
           alt="Logo" 
           className="w-11 h-11 object-contain transition-opacity duration-200 hidden dark:block" 
         />
       </div>
 
+      {/* Collapsed State Icon Dock (Fades out when expanded) */}
+      <div
+        className={`w-14 flex-1 flex flex-col items-center justify-between pb-4 transition-opacity duration-200 ${
+          isExpanded ? "opacity-0 absolute top-16 left-0 pointer-events-none" : "opacity-100"
+        }`}
+      >
+        {/* Middle: New Session */}
+        <div className="flex-1 flex items-center justify-center">
+          <Link
+            href="/start"
+            className="flex items-center justify-center w-10 h-10 rounded-sm hover:bg-panel transition-colors text-[#3b82f6] dark:text-[#E8A33D]"
+            title="New Session"
+          >
+            <Plus className="w-5 h-5" />
+          </Link>
+        </div>
+
+        {/* Bottom: Integrations (GitHub & Notion) */}
+        <div className="flex flex-col items-center gap-4">
+          {/* GitHub Icon Button */}
+          <div className="relative">
+            <button
+              onClick={githubConnected ? handleDisconnectGithub : handleConnectGithub}
+              className="flex items-center justify-center w-10 h-10 rounded-sm hover:bg-panel transition-colors text-[#3b82f6] dark:text-[#E8A33D]"
+              title={githubConnected ? "Disconnect GitHub" : "Connect GitHub"}
+            >
+              <Github className="w-5 h-5" />
+            </button>
+            {githubConnected && (
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-status-complete rounded-full border-2 border-base animate-pulse"></span>
+            )}
+          </div>
+
+          {/* Notion Icon Button */}
+          <div className="relative">
+            <div
+              className="flex items-center justify-center w-10 h-10 rounded-sm hover:bg-panel transition-colors text-[#3b82f6] dark:text-[#E8A33D]"
+              title={isConnected ? "Notion: Connected" : "Notion: Disconnected"}
+            >
+              <FileText className="w-5 h-5" />
+            </div>
+            {isConnected && (
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-status-complete rounded-full border-2 border-base animate-pulse"></span>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Sidebar Content (Fades out when collapsed) */}
       <div 
-        className={`flex-1 flex flex-col px-4 pb-4 transition-opacity duration-200 ${
-          isExpanded ? "opacity-100" : "opacity-0 pointer-events-none"
+        className={`w-[260px] flex-1 flex flex-col px-4 pb-4 transition-opacity duration-200 ${
+          isExpanded ? "opacity-100" : "opacity-0 absolute top-16 left-0 pointer-events-none"
         }`}
       >
         <Link href="/start" className="block w-full bg-accent text-base text-center py-2 text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity mb-8">
