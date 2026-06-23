@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config import settings
-from db import get_latest_artifact, get_decision_log, save_session, update_session_status, get_sessions_by_ids
+from db import get_latest_artifact, get_decision_log, save_session, update_session_status, get_sessions_by_ids, get_latest_artifact_version
 from graph import create_graph, init_saver
 from tools.pdf_export import export_to_pdf
 from tools.notion import create_notion_page, translate_artifact_to_notion_blocks, append_notion_blocks
@@ -224,26 +224,50 @@ async def get_session(id: str):
     state_values = snapshot.values or {}
     
     if not state_values:
-        details = ACTIVE_SESSIONS.get(id)
-        if not details:
-            raise HTTPException(status_code=404, detail="Session not found")
-        state_values = {
-            "session_id": id,
-            "startup_name": details["startup_name"],
-            "idea": details["idea"],
-            "github_repo": details["github_repo"],
-            "github_token": details.get("github_token"),
-            "status": "running",
-            "stages": {
-                "startup_advisor": {"status": "pending", "version": 0},
-                "market_research": {"status": "pending", "version": 0},
-                "product_manager": {"status": "pending", "version": 0},
-                "architect": {"status": "pending", "version": 0},
-                "engineering_manager": {"status": "pending", "version": 0},
-                "marketing": {"status": "pending", "version": 0}
-            },
-            "failed_stages": []
-        }
+        # Fallback: check database (Supabase or SQLite fallback) for the session metadata
+        db_sessions = await asyncio.to_thread(get_sessions_by_ids, [id])
+        if db_sessions:
+            db_sess = db_sessions[0]
+            # Reconstruct stages dict based on existing artifacts in the DB
+            stages_list = ["startup_advisor", "market_research", "product_manager", "architect", "engineering_manager", "marketing"]
+            stages_dict = {}
+            for s in stages_list:
+                version = await asyncio.to_thread(get_latest_artifact_version, id, s)
+                if version > 0:
+                    stages_dict[s] = {"status": "complete", "version": version}
+                else:
+                    stages_dict[s] = {"status": "pending", "version": 0}
+            
+            state_values = {
+                "session_id": id,
+                "startup_name": db_sess["startup_name"],
+                "idea": db_sess["idea"],
+                "github_repo": "",
+                "status": db_sess["status"],
+                "stages": stages_dict,
+                "failed_stages": []
+            }
+        else:
+            details = ACTIVE_SESSIONS.get(id)
+            if not details:
+                raise HTTPException(status_code=404, detail="Session not found")
+            state_values = {
+                "session_id": id,
+                "startup_name": details["startup_name"],
+                "idea": details["idea"],
+                "github_repo": details["github_repo"],
+                "github_token": details.get("github_token"),
+                "status": "running",
+                "stages": {
+                    "startup_advisor": {"status": "pending", "version": 0},
+                    "market_research": {"status": "pending", "version": 0},
+                    "product_manager": {"status": "pending", "version": 0},
+                    "architect": {"status": "pending", "version": 0},
+                    "engineering_manager": {"status": "pending", "version": 0},
+                    "marketing": {"status": "pending", "version": 0}
+                },
+                "failed_stages": []
+            }
     
     status = state_values.get("status", "running")
     is_interrupted = len(snapshot.tasks) > 0 and any(t.interrupts for t in snapshot.tasks)
