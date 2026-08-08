@@ -675,20 +675,4 @@ git push origin feature/your-feature-name
 
 ---
 
-## 👨‍💻 Author
 
-<div align="center">
-
-**Team PARALLAX**
-
-</div>
-
----
-
-<div align="center">
-
-*Built with obsessive attention to detail during INNOVA Hackathon · Team PARALLAX*
-
-**If Blueprint helped you, drop a ⭐ — it means a lot.**
-
-</div>
